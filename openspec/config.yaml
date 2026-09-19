@@ -1,0 +1,31 @@
+# openspec/config.yaml — OpenSpec 项目配置（生效文件）
+#
+# 本文件由 openspec/config.template.yaml 经 `npm run sync:config` 生成/同步：
+#   - schema / rules / operations 三段请改模板后同步，勿直接改此文件；
+#   - 其余顶层键可自由添加，同步时原样保留。
+
+schema: spec-driven
+
+context: |
+  Multi-repo workspace. Coordination happens in workspace-root; each sub-app
+  lives in its own repo listed in .code-workspace (the single source of directories).
+  Tech stack and per-repo conventions live in each repo's own AGENTS.md — read it live.
+  Execution is dispatched by the Orchestrator to per-repo Writer agents via the Task tool.
+
+rules:
+  proposal:
+    - State which sub-apps participate and their roles in this change.
+  specs:
+    - Generate exactly one delta spec per participating sub-app; never merge multiple sub-apps into a single spec file.
+    - Read .code-workspace folders first (workspace-root excluded); the capability path MUST equal the sub-app folder name, e.g. specs/frontend/spec.md.
+    - Each delta spec covers only that sub-app's behavior changes, in Requirement/Scenario format with ADDED/MODIFIED/REMOVED markers.
+  design:
+    - Contracts at sub-app boundaries must be field-precise; they are the cross-repo review baseline.
+  tasks:
+    - One task maps to exactly one sub-app; declare Assignee ({repo}-writer) and Status on every task.
+    - Cross-sub-app dependencies are expressed as task ordering, never as a single spanning task.
+
+operations:
+  apply:
+    guidance:
+      - Do not implement tasks directly in this session. Implementation is dispatched by the Orchestrator to per-repo Writer agents via the Task tool; see AGENTS.md section 4.

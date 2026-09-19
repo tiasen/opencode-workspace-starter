@@ -17,7 +17,7 @@
 |------|------|------|
 | `openspec/changes/{change-name}/context.md` | 全局背景 | ✅ |
 | `openspec/changes/{change-name}/design.md` | 跨仓技术方案 | ✅ |
-| `openspec/changes/{change-name}/specs/backend.md` | **专属契约（主文件）** | ✅ |
+| `openspec/changes/{change-name}/specs/backend/spec.md` | **专属 delta spec（主文件）** | ✅ |
 
 ### 修改范围
 
@@ -42,7 +42,7 @@
 |------|------|------|
 | `openspec/changes/{change-name}/context.md` | 全局背景 | ✅ |
 | `openspec/changes/{change-name}/design.md` | 跨仓技术方案 | ✅ |
-| `openspec/changes/{change-name}/specs/frontend.md` | **专属契约（主文件）** | ✅ |
+| `openspec/changes/{change-name}/specs/frontend/spec.md` | **专属 delta spec（主文件）** | ✅ |
 
 ### 修改范围
 
@@ -67,7 +67,7 @@
 |------|------|------|
 | `openspec/changes/{change-name}/context.md` | 全局背景 | ✅ |
 | `openspec/changes/{change-name}/design.md` | 跨仓技术方案 | ✅ |
-| `openspec/changes/{change-name}/specs/frontend.md` | **专属契约（主文件）** | ✅ |
+| `openspec/changes/{change-name}/specs/frontend/spec.md` | **专属 delta spec（主文件）** | ✅ |
 
 ### 修改范围
 

@@ -18,8 +18,9 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 ├── bin/create.mjs           # scaffolding 入口：npx github:user/repo 即用
 ├── scripts/init.mjs         # init 脚本：从 .code-workspace 派生全部 Agent 配置
 └── openspec/
-    ├── AGENTS.md            # OpenSpec SDD 协作规范
-    └── changes/{name}/      # 每个需求一个 Change（proposal/context/design/tasks/specs/review-report）
+    ├── FRAMEWORK.md         # 框架编排层规范
+    ├── config.yaml          # OpenSpec 生效配置（npm run sync:config 同步）
+    └── changes/{name}/      # 每个需求一个 Change（官方四件套 + context/review-report 扩展）
 ```
 
 > 约束：opencode 只识别 `.opencode/agents/*.md` 与 `.opencode/commands/*.md`（Markdown + frontmatter）。
@@ -33,7 +34,7 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 2. **Root Orchestrator（Primary）** — 拥有全局读权限与 `task` 调度权限，**不写任何业务代码**，只负责创建 Spec Change、拆分 task、调度子 Agent。
 3. **Per-Repo Writer（`mode: "subagent"`）** — 每仓一个，只写自己的仓库（权限物理隔离），通过 Task 接收文件链接组并执行。
 4. **Reviewer（`mode: "subagent"`）** — 只读所有仓，只写 `openspec/changes/*/review-report.md`，负责跨仓一致性审查。
-5. **OpenSpec SDD** — 每个 Change 包含 `proposal.md / context.md / design.md / tasks.md / review-report.md / specs/{repo}.md`。
+5. **OpenSpec SDD** — 每个 Change 包含官方四件套（`proposal.md` / `specs/{repo}/spec.md` / `design.md` / `tasks.md`）+ 本框架扩展（`context.md` / `review-report.md`）。
 
 ## 快速开始
 
@@ -54,16 +55,16 @@ npx github:YOUR_USER/opencode-workspace-starter . --init
 # 方式 B：本地已有本仓库时直接运行
 node bin/create.mjs my-project --init
 
-# 生成 Agent 配置
+# 生成 Agent 配置（末尾自动同步 openspec/config.yaml；官方 /opsx:* 命令需手动跑一次 openspec init）
 npm run init -- --yes
 
-# 启动 OpenCode（workspace-root），生成上下文索引
+# 启动 OpenCode（workspace-root），确认各仓就位
 # 新会话默认即 orchestrator agent（只读业务仓、通过 Task 调度）；切回 build 请用 Tab
 opencode run /prepare
 
-# 新建一个 Change
-cp -r openspec/changes/template openspec/changes/my-first-change
-# 按顺序编写 proposal.md → context.md → design.md → specs/{repo}.md → tasks.md
+# 新建一个 Change（官方命令起草四件套，规则来自 openspec/config.yaml）
+/opsx:propose my-first-change
+# 随后由 Orchestrator 补 context.md、按 Assignee 规则整理 tasks.md，再 Task 派发
 ```
 
 可用变体：
@@ -92,7 +93,7 @@ Orchestrator（Primary）
         │  FAILED → Orchestrator 生成 Remediation Task → 重新派发 Writer → 再次 Review
 ```
 
-- 传递给 Writer 的 Prompt 必须包含三件套：`context.md`（全局背景）+ `design.md`（跨仓方案）+ `specs/{target}.md`（专属契约，主文件）。
+- 传递给 Writer 的 Prompt 必须包含三件套：`context.md`（全局背景）+ `design.md`（跨仓方案）+ `specs/{target}/spec.md`（专属 delta spec，主文件）。
 - `tasks.md` 中每个 Task 有唯一 `Assignee`（如 `frontend-writer`）与 `Status`（`pending → in_progress → done/failed`）；Orchestrator 派发前置 `in_progress`，收到回报后更新。
 - Review `FAILED` 时，Orchestrator 解析 `review-report.md` 问题列表的 `Target / Issue / Action Required`，追加编号递增的 Remediation Task 并重新派发，直到 `PASSED`（同一问题连续失败 3 次后停下并请求人工决策）。
 - 详细规则见 `AGENTS.md` 第 4–5 节。
@@ -156,20 +157,21 @@ opencode-workspace-starter/
 │  └─ commands/
 │     └─ prepare.md                  # /prepare 命令（含 frontmatter description）
 ├─ scripts/
-│  └─ init.mjs
+│  ├─ init.mjs                       # 初始化：派生 agents + opencode.jsonc，末尾自动 sync:config
+│  ├─ sync-config.mjs                # 同步 openspec/config.yaml（npm run sync:config）
+│  └─ sync-config-lib.mjs            # 同步核心逻辑（供 init.mjs import）
 ├─ openspec/
-│  ├─ AGENTS.md
+│  ├─ FRAMEWORK.md                   # 框架编排层规范（artifact 格式以官方 schema 为准）
+│  ├─ config.yaml                    # OpenSpec 生效配置（由模板同步，勿手改三段）
+│  ├─ config.template.yaml           # 配置模板（schema/rules/operations 以此为准）
 │  ├─ specs/
 │  │  └─ .gitkeep
-│  └─ changes/
-│     ├─ .gitkeep
-│     └─ template/
-│        ├─ proposal.md
-│        ├─ context.md
-│        ├─ design.md
-│        ├─ tasks.md
-│        ├─ review-report.md
-│        └─ specs/
-│           └─ .gitkeep
+│  ├─ changes/
+│  │  └─ .gitkeep
+│  └─ templates/                   # 仅框架扩展：context.md / review-report.md / tasks 派发示例
+│     ├─ README.md
+│     ├─ context.md
+│     ├─ tasks.md
+│     └─ review-report.md
 └─ .gitignore
 ```

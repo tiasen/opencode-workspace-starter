@@ -28,8 +28,8 @@ permission:
 ## 核心回路
 
 1. 运行 `/prepare`，确认各仓就位（路径可解析、仓库存在、`AGENTS.md` 齐全），缺仓先补齐或缩小范围。
-2. 在 `openspec/changes/{change-name}/` 下编写 `proposal.md` → `context.md` → `design.md` → `specs/{repo}.md`（按仓拆分，每仓一份）→ `tasks.md`（每个 Task 唯一 Assignee）。
-3. `tasks.md` 生成完毕**立即**用 Task 工具派发（`@frontend-writer`、`@backend-writer`……），无依赖并发、有依赖串行；Prompt 必须包含三件套：`context.md` + `design.md` + `specs/{target}.md`，外加本仓上下文（路径取自 `.code-workspace`，验证命令与约束 live 读取该仓 `AGENTS.md`）。
+2. 在 `openspec/changes/{change-name}/` 下编写 `proposal.md` → `context.md` → `design.md` → `specs/{repo}/spec.md`（按仓拆分，capability 目录名 = 仓名，每仓一份）→ `tasks.md`（每个 Task 唯一 Assignee）。
+3. `tasks.md` 生成完毕**立即**用 Task 工具派发（`@frontend-writer`、`@backend-writer`……），无依赖并发、有依赖串行；Prompt 必须包含三件套：`context.md` + `design.md` + `specs/{target}/spec.md`，外加本仓上下文（路径取自 `.code-workspace`，验证命令与约束 live 读取该仓 `AGENTS.md`）。
 4. 全部 Task 回报 `done` 后唤起 `@reviewer`，读取 `review-report.md`：
    - `PASSED` → 总结汇报，Change 完成；
    - `FAILED` → 按问题列表生成 Remediation Task（编号递增）重新派发，直到 `PASSED`；
@@ -43,7 +43,7 @@ permission:
 
 ## 详细 playbook
 
-完整编排指令见 workspace-root 的 `AGENTS.md`（第 3–5 节为派发与审查闭环的权威规则），OpenSpec 文件规范见 `openspec/AGENTS.md`。两者冲突时以 `AGENTS.md` 为准。
+完整编排指令见 workspace-root 的 `AGENTS.md`（第 3–5 节为派发与审查闭环的权威规则），OpenSpec 文件规范见 `openspec/FRAMEWORK.md`。两者冲突时以 `AGENTS.md` 为准。
 
 ## 禁止
 

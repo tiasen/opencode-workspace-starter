@@ -33,4 +33,4 @@
 |------|------|
 | Session | 登录后服务端签发的会话，含 access token 与 refresh token |
 | 静默续期 | 在 access token 过期前用 refresh token 自动换取新 token，用户无感知 |
-| Delta Spec | 按仓拆分的增量契约，见 `specs/{repo}.md` |
+| Delta Spec | 按仓拆分的增量契约，见 `specs/{repo}/spec.md` |

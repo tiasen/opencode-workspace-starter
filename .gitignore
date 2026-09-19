@@ -9,7 +9,7 @@ out/
 .opencode-cache/
 .opencode/*.log
 
-# OpenSpec 本地草稿（保留 changes/template，其余 change 可按需忽略）
+# OpenSpec 本地草稿（保留 templates/，其余 change 可按需忽略）
 # 默认全部提交；如需忽略本地实验性 change，取消注释下一行并按名添加：
 # openspec/changes/local-*/
 

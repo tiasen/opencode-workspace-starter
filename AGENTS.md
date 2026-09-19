@@ -29,7 +29,7 @@
 | `proposal.md` | 背景、目标、非目标、成功标准 | Orchestrator |
 | `context.md` | 全局背景、技术约束、受影响仓库清单 | Orchestrator |
 | `design.md` | 跨仓技术方案、接口契约、数据流、风险 | Orchestrator |
-| `specs/{repo}.md` | 按仓拆分的 delta spec，每个仓一份契约 | Orchestrator |
+| `specs/{repo}/spec.md` | 按仓拆分的 delta spec（capability 目录名 = 仓名），每个仓一份 | Orchestrator |
 | `tasks.md` | 可派发的原子任务列表，显式标注 Assignee | Orchestrator |
 | `review-report.md` | Reviewer 填写的一致性审查报告 | Reviewer |
 
@@ -37,7 +37,7 @@
 
 1. 运行 `/prepare`，确认各仓就位（路径可解析、仓库存在、`AGENTS.md` 齐全），缺仓先补齐或缩小范围。
 2. 编写 `proposal.md`、`context.md`、`design.md`。
-3. 按仓拆分 `specs/{repo}.md`，每个文件只描述对应仓库的契约变更（接口、类型、行为、迁移步骤）。
+3. 按仓拆分 `specs/{repo}/spec.md`（capability 目录名 = 仓名），每个文件只描述对应仓库的行为变更（接口、类型、行为、迁移步骤）。
 4. 编写 `tasks.md`（格式见第 4 节），每个 Task 必须有唯一的 Assignee（`{repo}-writer`）。
 5. 进入第 4 节的自动化派发流程。
 6. 进入第 5 节的审查闭环流程。
@@ -60,11 +60,11 @@
 
 每个 Task 使用以下结构构造 Prompt（将 `{change-name}`、`{N}` 替换为实际值）：
 
-> "请读取并执行 `openspec/changes/{change-name}/tasks.md` 中的 Task {N}。上下文文件如下：`openspec/changes/{change-name}/context.md`（全局背景）、`openspec/changes/{change-name}/design.md`（跨仓技术方案）、`openspec/changes/{change-name}/specs/{target}.md`（你的专属契约，主文件）。本仓上下文（live 读取 `.code-workspace` 与各仓 `AGENTS.md`，以实时代码为准，不依赖任何快照）：路径 `{rel-path}`、验证命令 `{commands}`。你的修改范围限定在本仓内，绝不触碰其他仓库。完成修改后进行验证（运行该仓库约定的 lint / typecheck / test 命令）并回报：修改的文件列表、验证结果、未解决的风险。"
+> "请读取并执行 `openspec/changes/{change-name}/tasks.md` 中的 Task {N}。上下文文件如下：`openspec/changes/{change-name}/context.md`（全局背景）、`openspec/changes/{change-name}/design.md`（跨仓技术方案）、`openspec/changes/{change-name}/specs/{target}/spec.md`（你的专属 delta spec，主文件）。本仓上下文（live 读取 `.code-workspace` 与各仓 `AGENTS.md`，以实时代码为准，不依赖任何快照）：路径 `{rel-path}`、验证命令 `{commands}`。你的修改范围限定在本仓内，绝不触碰其他仓库。完成修改后进行验证（运行该仓库约定的 lint / typecheck / test 命令）并回报：修改的文件列表、验证结果、未解决的风险。"
 
 示例：
 
-> "请读取并执行 `openspec/changes/user-auth-v2/tasks.md` 中的 Task 1。上下文文件如下：`openspec/changes/user-auth-v2/context.md`、`openspec/changes/user-auth-v2/design.md`、`openspec/changes/user-auth-v2/specs/frontend.md`。本仓上下文：路径 `../frontend`、验证命令 `npm run typecheck`。你的修改范围限定在本仓内。完成修改后运行 `npm run typecheck` 并回报。"
+> "请读取并执行 `openspec/changes/user-auth-v2/tasks.md` 中的 Task 1。上下文文件如下：`openspec/changes/user-auth-v2/context.md`、`openspec/changes/user-auth-v2/design.md`、`openspec/changes/user-auth-v2/specs/frontend/spec.md`。本仓上下文：路径 `../frontend`、验证命令 `npm run typecheck`。你的修改范围限定在本仓内。完成修改后运行 `npm run typecheck` 并回报。"
 
 ### 4.4 状态跟踪
 
@@ -83,7 +83,7 @@
 #### 规则二：严禁跨仓任务（单仓原子性）
 
 - 每个 Task 有且仅有一个 Assignee（`{repo}-writer`），其"修改范围"中的每一个文件必须落在该仓路径下。**严禁把涉及 ≥2 个仓的改动塞进同一个 Task**，无论"顺手"还是"很小"。
-- 跨仓工作必须在 `design.md` 阶段先拆成按仓的 delta spec（`specs/{repo}.md`），再拆成多个单仓 Task；仓与仓之间的依赖用 Task 顺序表达（前序 Task 回报 `done` 后再派发后续 Task），绝不用一个 Task 横跨。
+- 跨仓工作必须在 `design.md` 阶段先拆成按仓的 delta spec（`specs/{repo}/spec.md`），再拆成多个单仓 Task；仓与仓之间的依赖用 Task 顺序表达（前序 Task 回报 `done` 后再派发后续 Task），绝不用一个 Task 横跨。
 - Remediation Task 同样遵守单仓原子性：一个失败项只派给其 `Target` 对应的 Writer。
 - 派发前 scope 自检（逐 Task 执行，不通过则打回重拆，不得派发）：
   1. `/prepare` 已确认目标仓就位（路径可解析、`AGENTS.md` 存在）？

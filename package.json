@@ -20,7 +20,8 @@
   ],
   "scripts": {
     "init": "node scripts/init.mjs",
-    "context": "opencode run /prepare"
+    "context": "opencode run /prepare",
+    "sync:config": "node scripts/sync-config.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

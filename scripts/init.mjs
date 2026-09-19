@@ -30,6 +30,7 @@ import os from "node:os";
 import { execSync, spawnSync } from "node:child_process";
 import readline from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { syncConfig } from "./sync-config-lib.mjs";
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -124,7 +125,7 @@ function stripJsonComments(text) {
 }
 
 function parseArgs(argv) {
-  const args = { workspace: null, root: null, yes: false, dryRun: false };
+  const args = { workspace: null, root: null, yes: false, dryRun: false, skipOpenspec: false };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--workspace" && argv[i + 1]) {
@@ -139,6 +140,8 @@ function parseArgs(argv) {
       args.yes = true;
     } else if (a === "--dry-run") {
       args.dryRun = true;
+    } else if (a === "--skip-openspec") {
+      args.skipOpenspec = true;
     } else if (a === "--help" || a === "-h") {
       printHelp();
       process.exit(0);
@@ -150,11 +153,12 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  log(`用法: node scripts/init.mjs [--workspace <path>] [--root <path>] [--yes] [--dry-run]`);
+  log(`用法: node scripts/init.mjs [--workspace <path>] [--root <path>] [--yes] [--dry-run] [--skip-openspec]`);
   log(`  --workspace  .code-workspace 文件路径`);
   log(`  --root       workspace-root（Agent 相对路径的解析基准，默认与 starter 根相同）`);
   log(`  --yes        覆盖已存在的 Agent 文件时不提示`);
   log(`  --dry-run    仅预览，不写文件`);
+  log(`  --skip-openspec  跳过最后的 OpenSpec 配置同步（离线/CI 用）`);
 }
 
 function askConfirm(question) {
@@ -183,7 +187,7 @@ function commandExists(cmd) {
 // ---------------------------------------------------------------------------
 
 function checkEnvironment() {
-  log("==> 1/5 环境检测");
+  log("==> 1/6 环境检测");
   const major = Number(process.versions.node.split(".")[0]);
   if (Number.isNaN(major) || major < MIN_NODE_MAJOR) {
     fail(`Node 版本过低: ${process.versions.node}，需要 >= ${MIN_NODE_MAJOR}`);
@@ -265,7 +269,7 @@ function findWorkspaceFile(explicit) {
 }
 
 function loadWorkspace(workspaceFile) {
-  log("==> 2/5 解析 workspace");
+  log("==> 2/6 解析 workspace");
   log(`  workspace 文件: ${workspaceFile}`);
   const raw = fs.readFileSync(workspaceFile, "utf8");
   let data;
@@ -417,7 +421,7 @@ function writerMarkdown(folder) {
     ``,
     `## 工作协议`,
     ``,
-    `1. 只执行 Task 指定的 \`openspec/changes/{change-name}/tasks.md\` 中的 Task；动工前必读该 Task 的上下文文件链接组：\`context.md\`（全局背景）、\`design.md\`（跨仓技术方案）、\`specs/${folder.name}.md\`（你的专属契约，主文件）。`,
+    `1. 只执行 Task 指定的 \`openspec/changes/{change-name}/tasks.md\` 中的 Task；动工前必读该 Task 的上下文文件链接组：\`context.md\`（全局背景）、\`design.md\`（跨仓技术方案）、\`specs/${folder.name}/spec.md\`（你的专属 delta spec，主文件，capability 路径即本仓名）。`,
     `2. 动工前阅读 \`${agentsRef}\`（本仓协作约束：技术栈、目录约定、lint / typecheck / test 命令），与专属契约冲突时以本仓 \`AGENTS.md\` 为准并上报。`,
     `3. 完成后运行本仓约定的验证命令，向 Orchestrator 回报：修改的文件列表、验证结果、未解决的风险。`,
     ``,
@@ -448,7 +452,7 @@ function reviewerMarkdown() {
     ``,
     `## 工作协议`,
     ``,
-    `1. Orchestrator 会在 Prompt 中给出 Change 名。阅读该 Change 的 \`design.md\`（审查基准，精确到字段级）、\`specs/{repo}.md\`（各仓 delta spec）与各仓实际改动。`,
+    `1. Orchestrator 会在 Prompt 中给出 Change 名。阅读该 Change 的 \`design.md\`（审查基准，精确到字段级）、\`specs/{repo}/spec.md\`（各仓 delta spec）与各仓实际改动。`,
     `2. 逐项核对检查清单：接口定义一致性（前端调用的 API 与后端实现契约是否匹配）、数据模型与类型定义一致性、架构约束遵循情况。`,
     `3. 把结果写入 \`openspec/changes/{change-name}/review-report.md\`：`,
     `   - \`Status\` 只能是 \`PENDING | PASSED | FAILED\` 之一；`,
@@ -537,7 +541,7 @@ async function main() {
   const workspaceFileDir = path.dirname(workspaceFile);
   const ws = loadWorkspace(workspaceFile);
 
-  log("==> 3/5 路径规范化");
+  log("==> 3/6 路径规范化");
   const folders = buildFolderModels(ws.folders, workspaceFileDir, workspaceRoot);
   if (folders.length === 0) {
     fail("没有可用的 folder 条目，终止。");
@@ -556,7 +560,7 @@ async function main() {
     warn("除 workspace-root 外没有其他 folder，仅生成 reviewer 与 opencode.jsonc。");
   }
 
-  log("==> 4/5 生成 Sub-Agent 配置");
+  log("==> 4/6 生成 Sub-Agent 配置");
   // opencode 只识别 .opencode/agents/ 下的 markdown agent 文件，
   // 生成格式为 frontmatter（description / mode / permission）+ Markdown 正文指令。
   const agentsDir = path.join(workspaceRoot, ".opencode", "agents");
@@ -583,7 +587,7 @@ async function main() {
     await writeFileSafe(reviewerPath, reviewerContent, args);
   }
 
-  log("==> 5/5 生成/更新 Orchestrator opencode.jsonc");
+  log("==> 5/6 生成/更新 Orchestrator opencode.jsonc");
   const orch = orchestratorConfig(writerNames);
   const orchPath = path.join(workspaceRoot, "opencode.jsonc");
   const orchContent = toJsoncWithHeader(
@@ -601,11 +605,29 @@ async function main() {
     await writeFileSafe(orchPath, orchContent, args);
   }
 
+  log("==> 6/6 同步 OpenSpec 项目配置");
+  // postinit：把 openspec/config.template.yaml 同步到 openspec/config.yaml。
+  // 全程非致命——失败只 warn 并给出手工命令，不中断 init。
+  if (args.skipOpenspec) {
+    log("  已跳过（--skip-openspec）。需要时手动运行 npm run sync:config。");
+  } else if (args.dryRun) {
+    log("  [dry-run] 将执行: npm run sync:config（同步 openspec/config.yaml）");
+  } else {
+    try {
+      const result = syncConfig({ root: workspaceRoot });
+      for (const line of result.messages) log(`  ${line}`);
+    } catch (err) {
+      warn(`OpenSpec 配置同步失败: ${err.message}`);
+      warn("请手动运行 npm run sync:config；如需官方 /opsx:* 命令，再手动运行 openspec init。");
+    }
+  }
+
   log("");
   log("完成。下一步:");
   log("  1. 检查 .opencode/agents/ 下生成的 *-writer.md 作用域是否正确");
   log("  2. 在 workspace-root 运行 /prepare 确认各仓就位");
-  log("  3. 新建 Spec Change：复制 openspec/changes/template 为 openspec/changes/<name>/");
+  log("  3. 如需官方 /opsx:* 命令，手动运行一次 openspec init（需先安装 CLI）");
+  log("  4. 新建 Spec Change：用 /opsx:propose 起草，扩展文件见 openspec/templates/");
 }
 
 main().catch((err) => {
