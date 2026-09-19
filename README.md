@@ -37,6 +37,12 @@ npx github:YOUR_USER/opencode-workspace-starter my-project
 cd my-project
 # 编辑 my-project.code-workspace 的 folders（相对该文件位置的路径，已自动由模板生成）
 
+# 方式 A2：workspace 文件先行（你已有 .code-workspace 时）
+mkdir my-project && cd my-project
+# 先把你的 my-project.code-workspace 放入当前目录（会被保留，绝不覆盖）
+npx github:YOUR_USER/opencode-workspace-starter . --init
+# 仅含 .code-workspace / .git 的目录无需 --force；已有其他文件时才需加 --force
+
 # 方式 B：本地已有本仓库时直接运行
 node bin/create.mjs my-project --init
 
@@ -56,7 +62,7 @@ cp -r openspec/changes/template openspec/changes/my-first-change
 ```bash
 npx -y github:YOUR_USER/opencode-workspace-starter my-project --init  # 跳过安装确认并自动跑 init
 npx github:YOUR_USER/opencode-workspace-starter#v0.2.0 my-project      # 指定分支 / tag / commit
-node bin/create.mjs my-project --force                                # 目标目录非空时覆盖
+node bin/create.mjs my-project --force                                # 目录含非 workspace 文件时覆盖（同名文件会被替换）
 ```
 
 原理：`npx <user>/<repo>` 会从 GitHub 拉取仓库打包，运行 `package.json` 的 `bin`（`create-opencode-workspace`，即 `bin/create.mjs`），把整套模板拷贝到目标目录。私有仓库需要本机有 git/ssh 凭证。

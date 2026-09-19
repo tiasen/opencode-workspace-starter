@@ -229,6 +229,7 @@ function findWorkspaceFile(explicit) {
   // 扫描 starter 根目录下的 *.code-workspace。
   // 用户自建的 workspace 文件优先于 template（scaffolding 后目录里通常两者并存，
   // 用户编辑的是自建的那份，不应被 template 抢占）。
+  // 多个自建文件并存时，优先与目录同名的那个（create.mjs 按此约定生成），其次按字母序。
   const named = [];
   try {
     for (const f of fs.readdirSync(STARTER_ROOT)) {
@@ -239,7 +240,13 @@ function findWorkspaceFile(explicit) {
   } catch {
     // 忽略读取错误，后续报错
   }
-  named.sort();
+  const preferredName = `${path.basename(STARTER_ROOT)}.code-workspace`;
+  named.sort((a, b) => {
+    const ap = path.basename(a) === preferredName ? 0 : 1;
+    const bp = path.basename(b) === preferredName ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
   const candidates = [...named];
   const template = path.join(STARTER_ROOT, "template.code-workspace");
   if (fs.existsSync(template) && !candidates.includes(template)) {
