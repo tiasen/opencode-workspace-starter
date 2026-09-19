@@ -6,8 +6,9 @@
  *   1. 环境检测（Node 版本、git、opencode CLI 可用性）
  *   2. 解析 VS Code `.code-workspace`（唯一的目录配置源）
  *   3. 路径规范化（path.resolve + POSIX 统一，防止 `..` 通配符错位）
- *   4. 为每个非 workspace-root 的 folder 生成 agents/{name}-writer.jsonc（mode: subagent，物理锁定单仓）
- *   5. 生成 agents/reviewer.jsonc（mode: subagent，只写 review-report.md）
+ *   4. 为每个非 workspace-root 的 folder 生成 .opencode/agents/{name}-writer.md
+ *      （Markdown + frontmatter，mode: subagent，物理锁定单仓；opencode 只识别此路径格式）
+ *   5. 生成 .opencode/agents/reviewer.md（mode: subagent，只写 review-report.md）
  *   6. 生成/更新 opencode.jsonc（Orchestrator 主配置，含 permission.task 授权）
  *
  * 零依赖：仅使用 Node 内置模块 fs / path / child_process / readline / url / os。
@@ -15,8 +16,8 @@
  * 用法:
  *   node scripts/init.mjs [--workspace <path>] [--root <path>] [--yes] [--dry-run]
  *
- *   --workspace <path>  .code-workspace 文件路径（默认依次查找
- *                        ./template.code-workspace、./*.code-workspace）
+ *   --workspace <path>  .code-workspace 文件路径（默认：用户自建优先、
+ *                        template.code-workspace 兜底；多文件并存时优先与目录同名者）
  *   --root <path>       workspace-root 目录（默认: .code-workspace 所在目录，
  *                        若 workspace 在仓库根则为 process.cwd()）
  *   --yes               非交互模式，存在同名 Agent 文件时直接覆盖
@@ -366,46 +367,103 @@ function buildFolderModels(folders, workspaceFileDir, workspaceRoot) {
 // 4/5. 生成 Agent 配置与 opencode.jsonc
 // ---------------------------------------------------------------------------
 
-function writerConfig(folder) {
-  // relPath 为 "." 的 folder 不应生成 writer（那是 workspace-root 本身）
-  const scope = folder.relPath === "." ? "." : `${folder.relPath}/**`;
-  const instructions = ["AGENTS.md"];
-  // workspace-root 的 AGENTS.md 无法用相对路径指向子仓时，保留占位引用；
-  // 若子仓 AGENTS.md 相对可达则引用它，否则仅保留根 AGENTS.md。
-  // 此处生成 `{relPath}/AGENTS.md` 形式，由 Orchestrator 按约定解析。
-  if (folder.relPath !== ".") {
-    instructions.push(`${folder.relPath}/AGENTS.md`);
-  }
-  return {
-    mode: "subagent",
-    description: `负责修改 ${folder.originalName} 仓库代码与契约实现的 Sub-Agent`,
-    permission: {
-      edit: {
-        [scope]: "allow",
-      },
-      external_directory: {
-        "openspec/**": "allow",
-        "../**": "allow",
-      },
-    },
-    instructions,
-  };
+/** YAML 单行标量转义：含空格或特殊字符时用双引号包裹（零依赖手写）。 */
+function yamlScalar(s) {
+  if (/^[A-Za-z0-9_./-]+$/.test(s)) return s;
+  return JSON.stringify(s);
 }
 
-function reviewerConfig() {
-  return {
-    mode: "subagent",
-    description: "负责跨仓一致性审查的 Reviewer Agent",
-    permission: {
-      edit: {
-        "openspec/changes/*/review-report.md": "allow",
-        "**": "deny",
-      },
-      external_directory: {
-        "../**": "allow",
-      },
-    },
-  };
+/** 由 permission 对象生成 agent markdown 的 frontmatter。 */
+function agentFrontmatter(description, permission) {
+  const lines = ["---"];
+  lines.push(`description: ${yamlScalar(description)}`);
+  lines.push(`mode: subagent`);
+  lines.push(`permission:`);
+  for (const [tool, rule] of Object.entries(permission)) {
+    if (typeof rule === "string") {
+      lines.push(`  ${tool}: ${rule}`);
+    } else {
+      lines.push(`  ${tool}:`);
+      for (const [pattern, action] of Object.entries(rule)) {
+        lines.push(`    ${yamlScalar(pattern)}: ${action}`);
+      }
+    }
+  }
+  lines.push(`---`);
+  return lines.join("\n");
+}
+
+function writerMarkdown(folder) {
+  // relPath 为 "." 的 folder 不应生成 writer（那是 workspace-root 本身）
+  const scope = `${folder.relPath}/**`;
+  const agentsRef = `${folder.relPath}/AGENTS.md`;
+  const front = agentFrontmatter(
+    `负责修改 ${folder.originalName} 仓库代码与契约实现的 Sub-Agent`,
+    {
+      // 注意：全局配置放行了 openspec/**（Orchestrator 需要），此处必须显式 deny
+      // 才能把 Writer 锁死在本仓；规则按"最后匹配获胜"求值，顺序不可调换。
+      edit: { [scope]: "allow", "openspec/**": "deny" },
+      external_directory: { "openspec/**": "allow", "../**": "allow" },
+    }
+  );
+  const body = [
+    `# ${folder.originalName} Writer`,
+    ``,
+    `你是 \`${folder.originalName}\` 仓库的专属 Writer Sub-Agent，由 Orchestrator 通过 Task 工具唤起（@${folder.name}-writer）。`,
+    ``,
+    `## 作用域（硬性）`,
+    ``,
+    `- 只写 \`${scope}\` 下的文件；\`openspec/\` 与其他仓库一律只读，绝不写入。`,
+    ``,
+    `## 工作协议`,
+    ``,
+    `1. 只执行 Task 指定的 \`openspec/changes/{change-name}/tasks.md\` 中的 Task；动工前必读该 Task 的上下文文件链接组：\`context.md\`（全局背景）、\`design.md\`（跨仓技术方案）、\`specs/${folder.name}.md\`（你的专属契约，主文件）。`,
+    `2. 动工前阅读 \`${agentsRef}\`（本仓协作约束：技术栈、目录约定、lint / typecheck / test 命令），与专属契约冲突时以本仓 \`AGENTS.md\` 为准并上报。`,
+    `3. 完成后运行本仓约定的验证命令，向 Orchestrator 回报：修改的文件列表、验证结果、未解决的风险。`,
+    ``,
+    `## 禁止`,
+    ``,
+    `- 不修改本仓之外的任何文件；不写 \`openspec/\` 下的任何文件（含 \`review-report.md\`，那是 Reviewer 的）。`,
+    ``,
+    `<!-- 本文件由 scripts/init.mjs 自动生成。仓库增删改请更新 .code-workspace 后重新运行 npm run init，不要手动改路径。 -->`,
+    ``,
+  ].join("\n");
+  return `${front}\n${body}`;
+}
+
+function reviewerMarkdown() {
+  const front = agentFrontmatter(`负责跨仓一致性审查的 Reviewer Agent`, {
+    edit: { "openspec/changes/*/review-report.md": "allow", "**": "deny" },
+    external_directory: { "../**": "allow" },
+  });
+  const body = [
+    `# Reviewer`,
+    ``,
+    `你是跨仓一致性审查员，由 Orchestrator 通过 Task 工具唤起（@reviewer）。`,
+    ``,
+    `## 作用域（硬性）`,
+    ``,
+    `- 可读：所有仓库代码、\`AGENTS.md\`、\`openspec/\` 下的全部 Change 文档。`,
+    `- 唯一可写：各 Change 下的 \`review-report.md\`。其他任何文件一律只读，绝不写业务代码。`,
+    ``,
+    `## 工作协议`,
+    ``,
+    `1. Orchestrator 会在 Prompt 中给出 Change 名。阅读该 Change 的 \`design.md\`（审查基准，精确到字段级）、\`specs/{repo}.md\`（各仓 delta spec）与各仓实际改动。`,
+    `2. 逐项核对检查清单：接口定义一致性（前端调用的 API 与后端实现契约是否匹配）、数据模型与类型定义一致性、架构约束遵循情况。`,
+    `3. 把结果写入 \`openspec/changes/{change-name}/review-report.md\`：`,
+    `   - \`Status\` 只能是 \`PENDING | PASSED | FAILED\` 之一；`,
+    `   - \`FAILED\` 时逐条列出 \`Target\`（如 \`frontend-writer\`）、\`Issue\`、\`Action Required\`，并在"结论与下一动作"中给出 Remediation Task 的 assignee 建议；`,
+    `   - \`PASSED\` 时写明"各仓一致，可以合并"。`,
+    ``,
+    `## 禁止`,
+    ``,
+    `- 不代写 \`review-report.md\` 之外的任何文件，不直接修复业务代码（修复是 Writer 的 Remediation Task）。`,
+    `- 不得在存在不一致时给出 \`PASSED\`。`,
+    ``,
+    `<!-- 本文件由 scripts/init.mjs 自动生成，重新运行 npm run init 可重新生成。 -->`,
+    ``,
+  ].join("\n");
+  return `${front}\n${body}`;
 }
 
 function orchestratorConfig(writerNames) {
@@ -497,17 +555,14 @@ async function main() {
   }
 
   log("==> 4/5 生成 Sub-Agent 配置");
-  const agentsDir = path.join(workspaceRoot, "agents");
+  // opencode 只识别 .opencode/agents/ 下的 markdown agent 文件，
+  // 生成格式为 frontmatter（description / mode / permission）+ Markdown 正文指令。
+  const agentsDir = path.join(workspaceRoot, ".opencode", "agents");
   const writerNames = [];
   for (const w of writers) {
-    const cfg = writerConfig(w);
-    const fileName = `${w.name}-writer.jsonc`;
+    const fileName = `${w.name}-writer.md`;
     const filePath = path.join(agentsDir, fileName);
-    const content = toJsoncWithHeader(cfg, [
-      `${w.originalName} Writer Sub-Agent（由 scripts/init.mjs 自动生成）`,
-      `作用域: ${w.relPath === "." ? "." : `${w.relPath}/**`}（仅可写本仓）`,
-      `重新运行 npm run init 可重新生成，不要手动改路径。`,
-    ]);
+    const content = writerMarkdown(w);
     if (args.dryRun) {
       log(`  [dry-run] 将写入: ${filePath}`);
       log(content);
@@ -517,12 +572,8 @@ async function main() {
     writerNames.push(w.name);
   }
 
-  const reviewer = reviewerConfig();
-  const reviewerPath = path.join(agentsDir, "reviewer.jsonc");
-  const reviewerContent = toJsoncWithHeader(reviewer, [
-    "Reviewer Sub-Agent（由 scripts/init.mjs 自动生成）",
-    "只读所有仓，只写 openspec/changes/*/review-report.md",
-  ]);
+  const reviewerPath = path.join(agentsDir, "reviewer.md");
+  const reviewerContent = reviewerMarkdown();
   if (args.dryRun) {
     log(`  [dry-run] 将写入: ${reviewerPath}`);
     log(reviewerContent);
@@ -550,7 +601,7 @@ async function main() {
 
   log("");
   log("完成。下一步:");
-  log("  1. 检查 agents/ 下生成的 *-writer.jsonc 作用域是否正确");
+  log("  1. 检查 .opencode/agents/ 下生成的 *-writer.md 作用域是否正确");
   log("  2. 在 workspace-root 运行 /prepare 生成 openspec/repo-context.md");
   log("  3. 新建 Spec Change：复制 openspec/changes/template 为 openspec/changes/<name>/");
 }

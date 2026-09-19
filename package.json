@@ -8,10 +8,9 @@
     "create-opencode-workspace": "./bin/create.mjs"
   },
   "files": [
+    ".opencode/",
     "bin/",
     "scripts/",
-    "agents/",
-    "commands/",
     "openspec/",
     "template.code-workspace",
     "opencode.jsonc",

@@ -1,6 +1,10 @@
+---
+description: 生成跨仓上下文索引 openspec/repo-context.md（各仓 AGENTS.md 摘要 + commit hash）
+---
+
 # /prepare — 生成跨仓上下文索引
 
-> 在 workspace-root 以 Orchestrator 身份运行：`opencode run /prepare`。
+> 在 workspace-root 以 Orchestrator 身份运行：`/prepare`。
 > 产物：`openspec/repo-context.md`，供后续所有 Spec Change 的 `context.md` 与任务派发时参考。
 
 ## 目标
@@ -9,8 +13,8 @@
 
 ## 执行步骤
 
-1. **定位 workspace 文件**：优先使用调用时传入的 workspace 路径，否则按 `template.code-workspace`、`*.code-workspace` 顺序查找。
-2. **解析 folders**：列出全部 `name` 与 `path`，用 `path.resolve` 规范化为绝对路径，并标注是否存在。
+1. **定位 workspace 文件**：优先使用调用时传入的 workspace 路径，否则按用户自建优先、`template.code-workspace` 兜底的顺序查找（与 `scripts/init.mjs` 一致）。
+2. **解析 folders**：列出全部 `name` 与 `path`，用 `path.resolve` 规范化为绝对路径，并标注是否存在。`name` 缺失时按 VS Code 规则取路径 basename。
 3. **逐仓采集**（每个 folder）：
    - 读取 `{repo}/AGENTS.md` 全文，提取：技术栈、目录约定、lint / typecheck / test 命令、分支与提交规范。
    - 若为 git 仓库，运行 `git -C {repo} rev-parse HEAD` 记录 commit hash，运行 `git -C {repo} status --short --branch` 记录工作区洁净度。

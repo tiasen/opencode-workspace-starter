@@ -8,16 +8,23 @@
 workspace-root/              # Orchestrator 运行位置（本仓库）
 ├── AGENTS.md                # Orchestrator 编排指令（Primary Agent）
 ├── opencode.jsonc           # 主配置：openspec 可写、业务仓只读、task 授权
-├── agents/
-│   ├── {repo}-writer.jsonc  # 每个仓库一个 Writer（mode: subagent，锁定单仓）
-│   └── reviewer.jsonc       # 跨仓审查员（mode: subagent，只写 review-report.md）
-├── commands/prepare.md      # /prepare 命令：生成 openspec/repo-context.md
+├── .opencode/
+│   ├── agents/
+│   │   ├── {repo}-writer.md # 每个仓库一个 Writer（mode: subagent，锁定单仓，由 init 生成）
+│   │   └── reviewer.md      # 跨仓审查员（mode: subagent，只写 review-report.md）
+│   └── commands/
+│       └── prepare.md       # /prepare 命令：生成 openspec/repo-context.md
 ├── bin/create.mjs           # scaffolding 入口：npx github:user/repo 即用
 ├── scripts/init.mjs         # init 脚本：从 .code-workspace 派生全部 Agent 配置
 └── openspec/
     ├── AGENTS.md            # OpenSpec SDD 协作规范
     └── changes/{name}/      # 每个需求一个 Change（proposal/context/design/tasks/specs/review-report）
 ```
+
+> 约束：opencode 只识别 `.opencode/agents/*.md` 与 `.opencode/commands/*.md`（Markdown + frontmatter）。
+> 不要在 `.opencode/agents/` 下放 `README.md` 之类的说明文件——每个 `.md` 都会被注册成一个 agent。
+> 不要手动编辑 `.opencode/agents/` 下的路径；仓库增删改请更新 `.code-workspace` 后重新运行 `npm run init`，
+> `opencode.jsonc` 中的 `permission.task` 会同步追加授权。
 
 ### 核心设计原则
 
@@ -90,7 +97,7 @@ Orchestrator（Primary）
 
 ## /prepare 与上下文索引
 
-`/prepare`（定义见 `commands/prepare.md`）只读业务仓、只写 `openspec/repo-context.md`：
+`/prepare`（定义见 `.opencode/commands/prepare.md`）只读业务仓、只写 `openspec/repo-context.md`：
 
 - 读取各仓 `AGENTS.md`，提取技术栈、目录约定、lint / typecheck / test 命令。
 - 记录各仓 `git rev-parse HEAD` commit hash 与工作区洁净度。
@@ -106,6 +113,29 @@ Orchestrator（Primary）
 | `{repo}-writer` | subagent | 本仓 `{path}/**` | `openspec/**` | — |
 | reviewer | subagent | `openspec/changes/*/review-report.md` | 所有仓 | — |
 
+### Writer 文件示例（由 `init` 生成）
+
+`{ "name": "frontend", "path": "../frontend" }` 生成 `.opencode/agents/frontend-writer.md`：
+
+```md
+---
+description: "负责修改 frontend 仓库代码与契约实现的 Sub-Agent"
+mode: subagent
+permission:
+  edit:
+    "../frontend/**": allow
+    "openspec/**": deny   # 锁死单仓：全局放行了 openspec，writer 必须显式 deny
+  external_directory:
+    "openspec/**": allow
+    "../**": allow
+---
+
+# frontend Writer
+（正文：作用域声明 + 工作协议——读 trio 上下文、遵守 `../frontend/AGENTS.md`、验证后回报）
+```
+
+新增仓库时往 `.code-workspace` 的 `folders` 追加一项，运行 `npm run init -- --yes` 即可生成新的 writer。
+
 ## 目录结构
 
 ```text
@@ -117,13 +147,13 @@ opencode-workspace-starter/
 ├─ AGENTS.md
 ├─ bin/
 │  └─ create.mjs                     # scaffolding 入口（npx / node 两用）
-├─ commands/
-│  └─ prepare.md
+├─ .opencode/
+│  ├─ agents/
+│  │  └─ reviewer.md                # 跨仓审查员（{repo}-writer.md 由 init 按仓生成）
+│  └─ commands/
+│     └─ prepare.md                  # /prepare 命令（含 frontmatter description）
 ├─ scripts/
 │  └─ init.mjs
-├─ agents/
-│  ├─ README.md
-│  └─ reviewer.jsonc
 ├─ openspec/
 │  ├─ AGENTS.md
 │  ├─ specs/

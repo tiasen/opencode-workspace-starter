@@ -4,9 +4,10 @@ dist/
 build/
 out/
 
-# OpenCode 运行时
-.opencode/
+# OpenCode 本地运行时产物（注意：.opencode/agents 与 .opencode/commands
+# 是本框架的 Agent/命令配置，必须提交，不要忽略）
 .opencode-cache/
+.opencode/*.log
 
 # OpenSpec 本地草稿（保留 changes/template，其余 change 可按需忽略）
 # 默认全部提交；如需忽略本地实验性 change，取消注释下一行并按名添加：
