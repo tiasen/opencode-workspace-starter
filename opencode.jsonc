@@ -1,4 +1,5 @@
 {
+  "$schema": "https://opencode.ai/config.json",
   // Root Orchestrator Agent (Primary) —— 跨仓架构编排器
   // 运行位置: workspace-root。本配置由 scripts/init.mjs 自动生成/更新，
   // 手动修改后再次运行 init 会被覆盖（task 列表与 instructions 部分）。
