@@ -473,6 +473,8 @@ function orchestratorConfig(writerNames) {
   }
   task["reviewer"] = "allow";
   return {
+    // 新会话默认进入 orchestrator agent；全局权限同时约束其他 agent。
+    default_agent: "orchestrator",
     permission: {
       edit: {
         "openspec/**": "allow",

@@ -10,6 +10,7 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 ├── opencode.jsonc           # 主配置：openspec 可写、业务仓只读、task 授权
 ├── .opencode/
 │   ├── agents/
+│   │   ├── orchestrator.md      # Orchestrator 主 agent（mode: primary，默认进入）
 │   │   ├── {repo}-writer.md # 每个仓库一个 Writer（mode: subagent，锁定单仓，由 init 生成）
 │   │   └── reviewer.md      # 跨仓审查员（mode: subagent，只写 review-report.md）
 │   └── commands/
@@ -57,6 +58,7 @@ node bin/create.mjs my-project --init
 npm run init -- --yes
 
 # 启动 OpenCode（workspace-root），生成上下文索引
+# 新会话默认即 orchestrator agent（只读业务仓、通过 Task 调度）；切回 build 请用 Tab
 opencode run /prepare
 
 # 新建一个 Change
@@ -149,6 +151,7 @@ opencode-workspace-starter/
 │  └─ create.mjs                     # scaffolding 入口（npx / node 两用）
 ├─ .opencode/
 │  ├─ agents/
+│  │  ├─ orchestrator.md            # Orchestrator 主 agent（mode: primary）
 │  │  └─ reviewer.md                # 跨仓审查员（{repo}-writer.md 由 init 按仓生成）
 │  └─ commands/
 │     └─ prepare.md                  # /prepare 命令（含 frontmatter description）

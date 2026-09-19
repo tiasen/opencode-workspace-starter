@@ -50,7 +50,7 @@ openspec/
 
 ### tasks.md
 
-格式见 `changes/template/tasks.md`。每个 Task 必须包含：Assignee（`{repo}-writer`）、Status（`pending | in_progress | done | failed`）、上下文文件链接组、修改范围、Acceptance 清单。Remediation Task 必须额外引用 `review-report.md` 的问题编号。
+格式见 `changes/template/tasks.md`。每个 Task 必须包含：Assignee（`{repo}-writer`）、Status（`pending | in_progress | done | failed`）、上下文文件链接组、修改范围、Acceptance 清单。Remediation Task 必须额外引用 `review-report.md` 的问题编号。单仓原子性：一个 Task 只归属一个仓库，其修改范围不得横跨 ≥2 个仓；跨仓工作先拆成多个单仓 Task，依赖用 Task 顺序表达。
 
 ### review-report.md
 

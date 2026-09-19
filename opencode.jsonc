@@ -3,6 +3,9 @@
   // Root Orchestrator Agent (Primary) —— 跨仓架构编排器
   // 运行位置: workspace-root。本配置由 scripts/init.mjs 自动生成/更新，
   // 手动修改后再次运行 init 会被覆盖（task 列表与 instructions 部分）。
+  // 新会话默认进入 orchestrator agent（.opencode/agents/orchestrator.md）；
+  // build 等其他 agent 仍可用 Tab 切换，但受下方全局权限约束。
+  "default_agent": "orchestrator",
   "permission": {
     "edit": {
       "openspec/**": "allow",
