@@ -7,7 +7,6 @@
 ```text
 openspec/
 ├── AGENTS.md               # 本规范文件
-├── repo-context.md         # 由 /prepare 生成的各仓摘要索引（git-ignored 可选提交）
 ├── specs/                  # 基线 spec（跨 change 的长期契约，可选）
 └── changes/
     ├── .gitkeep
@@ -38,7 +37,7 @@ openspec/
 
 ### context.md
 
-包含：全局背景、受影响仓库清单（含各仓当前 commit hash）、技术约束（版本、兼容性、时间窗口）、术语表。必须列出本次 Change 涉及的全部仓库及其 `AGENTS.md` 关键约束摘要。
+包含：全局背景、受影响仓库清单（含各仓路径、当次角色、验证命令）、技术约束（版本、兼容性、时间窗口）、术语表。必须列出本次 Change 涉及的全部仓库及其 `AGENTS.md` 关键约束摘要。清单现写现用，不设常驻快照；角色是相对当次 Change 而言的，不得理解为仓库固有属性。
 
 ### design.md
 

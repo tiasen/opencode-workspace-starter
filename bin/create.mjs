@@ -206,7 +206,7 @@ function main() {
   log(`  1. cd ${cdTarget}`);
   log(`  2. 检查 ${activeWorkspace} 的 folders 是否指向真实仓库路径`);
   log(`  3. npm run init -- --yes`);
-  log(`  4. 在 workspace-root 运行 opencode，通过 /prepare 生成 openspec/repo-context.md`);
+  log(`  4. 在 workspace-root 运行 opencode，通过 /prepare 确认各仓就位`);
 }
 
 main();

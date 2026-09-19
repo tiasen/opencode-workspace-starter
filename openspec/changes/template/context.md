@@ -1,7 +1,7 @@
 # Context: {change-name}
 
 - **Change**: `{change-name}`
-- **RepoContext**: `openspec/repo-context.md`（由 `/prepare` 生成，生成时间 {timestamp}）
+- **上下文来源**: live 读取（`.code-workspace` + 各仓 `AGENTS.md` + 当次设计），无快照文件
 
 ## 全局背景
 
@@ -9,11 +9,11 @@
 
 ## 受影响仓库清单
 
-| 仓库 | 路径 | Commit | 角色 |
-|------|------|--------|------|
-| workspace-root | `.` | {root-commit} | 托管 openspec，不含业务代码 |
-| frontend | `../frontend` | {frontend-commit} | 调用方：更新登录 API 客户端与类型 |
-| backend | `../backend` | {backend-commit} | 实现方：提供 `/api/v2/session` 与 OpenAPI |
+| 仓库 | 路径 | 当次角色 | 验证命令 |
+|------|------|----------|----------|
+| workspace-root | `.` | 托管 openspec，不含业务代码 | — |
+| frontend | `../frontend` | 调用方：更新登录 API 客户端与类型 | `npm run typecheck` |
+| backend | `../backend` | 实现方：提供 `/api/v2/session` 与 OpenAPI | `npm test` |
 
 各仓 `AGENTS.md` 关键约束摘要：
 

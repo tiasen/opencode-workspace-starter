@@ -199,7 +199,7 @@ function checkEnvironment() {
       warn("git 存在但无法获取版本，继续执行。");
     }
   } else {
-    warn("未检测到 git，commit hash 校验（/prepare）将不可用，建议安装。");
+    warn("未检测到 git，/prepare 的工作区洁净度检查将不可用，建议安装。");
   }
 
   if (commandExists("opencode")) {
@@ -604,7 +604,7 @@ async function main() {
   log("");
   log("完成。下一步:");
   log("  1. 检查 .opencode/agents/ 下生成的 *-writer.md 作用域是否正确");
-  log("  2. 在 workspace-root 运行 /prepare 生成 openspec/repo-context.md");
+  log("  2. 在 workspace-root 运行 /prepare 确认各仓就位");
   log("  3. 新建 Spec Change：复制 openspec/changes/template 为 openspec/changes/<name>/");
 }
 

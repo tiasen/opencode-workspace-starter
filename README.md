@@ -14,7 +14,7 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 │   │   ├── {repo}-writer.md # 每个仓库一个 Writer（mode: subagent，锁定单仓，由 init 生成）
 │   │   └── reviewer.md      # 跨仓审查员（mode: subagent，只写 review-report.md）
 │   └── commands/
-│       └── prepare.md       # /prepare 命令：生成 openspec/repo-context.md
+  │       └── prepare.md       # /prepare 命令：workspace 就位检查（无状态，不写文件）
 ├── bin/create.mjs           # scaffolding 入口：npx github:user/repo 即用
 ├── scripts/init.mjs         # init 脚本：从 .code-workspace 派生全部 Agent 配置
 └── openspec/
@@ -99,11 +99,11 @@ Orchestrator（Primary）
 
 ## /prepare 与上下文索引
 
-`/prepare`（定义见 `.opencode/commands/prepare.md`）只读业务仓、只写 `openspec/repo-context.md`：
+`/prepare`（定义见 `.opencode/commands/prepare.md`）是无状态检查：只读业务仓、不写任何文件，结果对话内回报：
 
-- 读取各仓 `AGENTS.md`，提取技术栈、目录约定、lint / typecheck / test 命令。
-- 记录各仓 `git rev-parse HEAD` commit hash 与工作区洁净度。
-- Orchestrator 在新建 Change 时引用该索引填充 `context.md` 的“受影响仓库清单”，并在 commit 漂移时发出提示。
+- 校验 `.code-workspace` 中各 folder 路径可解析、仓库存在、`AGENTS.md` 齐全。
+- 记录各仓工作区洁净度（不记录、不比对 commit——执行依据永远是 live 代码）。
+- 缺仓时如实回报，由 Orchestrator 决定补齐检出还是缩小 Change 范围。
 
 维护节奏：每次新建 Change 前运行一次；大仓重构后重新运行。
 

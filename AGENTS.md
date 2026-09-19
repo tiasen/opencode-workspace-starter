@@ -17,7 +17,8 @@
 
 - VS Code `.code-workspace` 文件是**唯一的目录配置源**。
 - 不得手动猜测或硬编码仓库绝对路径。如需确认仓库列表，读取由 `npm run init` 生成的 Agent 配置或重新解析 `.code-workspace`。
-- 各子仓的协作约束以各仓根目录的 `AGENTS.md` 为准；跨仓摘要索引以 `openspec/repo-context.md`（由 `/prepare` 生成）为准。
+- 各子仓的协作约束以各仓根目录的 `AGENTS.md` 为准，派发时 live 读取，禁止凭记忆或过期假设填写。
+- **单向依赖原则**：编排框架只读子仓，子仓对框架无感知、无需配合。新仓库接入 = 改 `.code-workspace` + 跑 `npm run init`，零侵入（不需要子仓添加或修改任何文件）；子仓唯一要做的就是保持自家 `AGENTS.md` 准确——而那是它本来就要做的。角色信息（如"调用方/实现方"）是相对当次 Change 而言的，只写在该 Change 的 `context.md` 仓库清单里，不设常驻角色表。
 
 ## 3. OpenSpec SDD 工作流
 
@@ -34,7 +35,7 @@
 
 新建 Change 流程：
 
-1. 运行 `/prepare` 或读取 `openspec/repo-context.md`，确认各仓当前状态与 commit hash。
+1. 运行 `/prepare`，确认各仓就位（路径可解析、仓库存在、`AGENTS.md` 齐全），缺仓先补齐或缩小范围。
 2. 编写 `proposal.md`、`context.md`、`design.md`。
 3. 按仓拆分 `specs/{repo}.md`，每个文件只描述对应仓库的契约变更（接口、类型、行为、迁移步骤）。
 4. 编写 `tasks.md`（格式见第 4 节），每个 Task 必须有唯一的 Assignee（`{repo}-writer`）。
@@ -59,11 +60,11 @@
 
 每个 Task 使用以下结构构造 Prompt（将 `{change-name}`、`{N}` 替换为实际值）：
 
-> "请读取并执行 `openspec/changes/{change-name}/tasks.md` 中的 Task {N}。上下文文件如下：`openspec/changes/{change-name}/context.md`（全局背景）、`openspec/changes/{change-name}/design.md`（跨仓技术方案）、`openspec/changes/{change-name}/specs/{target}.md`（你的专属契约，主文件）。本仓上下文（来自 `openspec/repo-context.md`，已校验未漂移）：路径 `{rel-path}`、Commit `{short-hash}`、验证命令 `{commands}`。你的修改范围限定在本仓内，绝不触碰其他仓库。完成修改后进行验证（运行该仓库约定的 lint / typecheck / test 命令）并回报：修改的文件列表、验证结果、未解决的风险。"
+> "请读取并执行 `openspec/changes/{change-name}/tasks.md` 中的 Task {N}。上下文文件如下：`openspec/changes/{change-name}/context.md`（全局背景）、`openspec/changes/{change-name}/design.md`（跨仓技术方案）、`openspec/changes/{change-name}/specs/{target}.md`（你的专属契约，主文件）。本仓上下文（live 读取 `.code-workspace` 与各仓 `AGENTS.md`，以实时代码为准，不依赖任何快照）：路径 `{rel-path}`、验证命令 `{commands}`。你的修改范围限定在本仓内，绝不触碰其他仓库。完成修改后进行验证（运行该仓库约定的 lint / typecheck / test 命令）并回报：修改的文件列表、验证结果、未解决的风险。"
 
 示例：
 
-> "请读取并执行 `openspec/changes/user-auth-v2/tasks.md` 中的 Task 1。上下文文件如下：`openspec/changes/user-auth-v2/context.md`、`openspec/changes/user-auth-v2/design.md`、`openspec/changes/user-auth-v2/specs/frontend.md`。本仓上下文：路径 `../frontend`、Commit `a1b2c3d`、验证命令 `npm run typecheck`。你的修改范围限定在本仓内。完成修改后运行 `npm run typecheck` 并回报。"
+> "请读取并执行 `openspec/changes/user-auth-v2/tasks.md` 中的 Task 1。上下文文件如下：`openspec/changes/user-auth-v2/context.md`、`openspec/changes/user-auth-v2/design.md`、`openspec/changes/user-auth-v2/specs/frontend.md`。本仓上下文：路径 `../frontend`、验证命令 `npm run typecheck`。你的修改范围限定在本仓内。完成修改后运行 `npm run typecheck` 并回报。"
 
 ### 4.4 状态跟踪
 
@@ -73,11 +74,11 @@
 
 ### 4.5 派发铁律（强制）
 
-#### 规则一：派发必须 grounded in `/prepare` 结果
+#### 规则一：派发必须 grounded in live 上下文（`/prepare` + 实时读取）
 
-- 派发任何 Task 之前，必须已读取 `openspec/repo-context.md`。该文件不存在、未覆盖全部目标仓，或其中记录的 commit 与当前实际 commit 不一致时，**先重跑 `/prepare`，再派发**。
-- 构造 Prompt 时必须写入本仓三要素（路径、Commit 短 hash、验证命令），三要素取值以 `repo-context.md` 为准，并声明"已校验未漂移"。禁止凭记忆或过期假设填写。
-- commit 漂移时的处理：重新 `/prepare`，用新 hash 更新 `context.md` 的仓库清单，并在 Prompt 中明确告知 Writer 基准已变更。
+- 派发任何 Task 之前，必须已运行 `/prepare` 确认各仓就位。发现缺仓或缺 `AGENTS.md` 时，先补齐检出或缩小 Change 范围，不得带着未知数派发。
+- 构造 Prompt 时必须写入本仓上下文：路径（取自 `.code-workspace`）、验证命令与关键约束（live 读取该仓 `AGENTS.md`）、当次 Change 的三件套文档。以实时代码为准，不依赖任何快照文件；禁止凭记忆或过期假设填写。
+- 执行依据永远是 live 代码：Writer 动工时读到的就是最新状态，无需也不维护 commit 快照；真正的跨仓不一致由 Reviewer 的一致性审查兜底。
 
 #### 规则二：严禁跨仓任务（单仓原子性）
 
@@ -85,9 +86,9 @@
 - 跨仓工作必须在 `design.md` 阶段先拆成按仓的 delta spec（`specs/{repo}.md`），再拆成多个单仓 Task；仓与仓之间的依赖用 Task 顺序表达（前序 Task 回报 `done` 后再派发后续 Task），绝不用一个 Task 横跨。
 - Remediation Task 同样遵守单仓原子性：一个失败项只派给其 `Target` 对应的 Writer。
 - 派发前 scope 自检（逐 Task 执行，不通过则打回重拆，不得派发）：
-  1. `repo-context.md` 存在且覆盖本 Task 的目标仓，commit 未漂移？
+  1. `/prepare` 已确认目标仓就位（路径可解析、`AGENTS.md` 存在）？
   2. 修改范围是否全部落在 Assignee 本仓内？
-  3. Prompt 是否包含三件套 + 本仓三要素？
+  3. Prompt 是否包含三件套 + 本仓上下文（路径、验证命令）？
 
 ## 5. 审查闭环流程
 
@@ -109,5 +110,5 @@
 - 禁止直接编辑 `../frontend/**`、`../backend/**` 或任何业务仓文件。
 - 禁止代写 `review-report.md`（该文件仅 Reviewer 可写）。
 - 禁止跳过 `tasks.md` 直接口头分发任务；所有分发必须有书面 Task 记录。
-- 禁止分发跨仓 Task（见 4.5 规则二）；禁止在 Prompt 中省略本仓三要素。
+- 禁止分发跨仓 Task（见 4.5 规则二）；禁止在 Prompt 中省略本仓上下文（路径、验证命令）。
 - 禁止在 Review `FAILED` 时强行宣布完成。

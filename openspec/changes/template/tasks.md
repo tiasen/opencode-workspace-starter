@@ -3,7 +3,7 @@
 > Orchestrator 在 `tasks.md` 生成完毕后，必须使用 OpenCode Task 工具按 Assignee 派发。
 > Prompt 模板见根目录 `AGENTS.md` 第 4.3 节。无依赖的 Task 并发派发，有依赖的按顺序派发。
 >
-> 铁律（见 `AGENTS.md` 4.5）：① 派发前必须已读取 `openspec/repo-context.md`（缺失/过期/漂移则先重跑 `/prepare`），Prompt 写入本仓三要素；
+> 铁律（见 `AGENTS.md` 4.5）：① 派发前必须已运行 `/prepare` 确认各仓就位，Prompt 写入本仓上下文（路径 + 验证命令，live 取值，无快照）；
 > ② 一个 Task 只归属一个仓库，修改范围严禁横跨 ≥2 个仓，违例打回重拆。
 
 ## Task 1: 后端实现 /api/v2/session 系列接口
