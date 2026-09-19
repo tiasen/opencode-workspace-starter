@@ -1,0 +1,30 @@
+{
+  "name": "opencode-workspace-starter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "基于 OpenCode Sub-Agent 体系 + OpenSpec SDD（Spec-Driven Development）的多仓库协作开发框架脚手架",
+  "bin": {
+    "create-opencode-workspace": "./bin/create.mjs"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "agents/",
+    "commands/",
+    "openspec/",
+    "template.code-workspace",
+    "opencode.jsonc",
+    "AGENTS.md",
+    "README.md",
+    ".gitignore"
+  ],
+  "scripts": {
+    "init": "node scripts/init.mjs",
+    "prepare": "opencode run /prepare"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
