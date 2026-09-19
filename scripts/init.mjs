@@ -329,21 +329,28 @@ function buildFolderModels(folders, workspaceFileDir, workspaceRoot) {
   const models = [];
   const seenNames = new Set();
   for (const f of folders) {
-    if (!f || typeof f.path !== "string" || typeof f.name !== "string") {
-      warn(`跳过非法 folder 条目: ${JSON.stringify(f)}`);
+    // VS Code 规范里 folder 只有 path 必填，name 可选。
+    // name 缺失时模仿 VS Code：取解析后绝对路径的 basename 作为显示名。
+    if (!f || typeof f.path !== "string" || String(f.path).trim() === "") {
+      warn(`跳过非法 folder 条目（缺少 path）: ${JSON.stringify(f)}`);
       continue;
     }
-    const name = sanitizeAgentName(f.name);
+    const abs = path.resolve(workspaceFileDir, String(f.path).trim());
+    const hasName = typeof f.name === "string" && f.name.trim() !== "";
+    const rawName = hasName ? f.name : path.basename(abs);
+    const name = sanitizeAgentName(rawName);
+    if (!hasName) {
+      log(`  folder 未指定 name，按 VS Code 规则取路径 basename: "${rawName}"（规范化为 "${name}"）`);
+    }
     if (seenNames.has(name)) {
-      warn(`folder name 重复 "${f.name}"（规范化为 "${name}"），已跳过重复项。`);
+      warn(`folder name 重复 "${rawName}"（规范化为 "${name}"），已跳过重复项。`);
       continue;
     }
     seenNames.add(name);
     const rel = normalizeFolderPath(f.path, workspaceFileDir, workspaceRoot);
-    const abs = path.resolve(workspaceFileDir, String(f.path).trim() || ".");
     const exists = fs.existsSync(abs);
     models.push({
-      originalName: f.name,
+      originalName: rawName,
       name,
       rawPath: f.path,
       relPath: rel,
