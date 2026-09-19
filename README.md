@@ -126,11 +126,11 @@ description: "负责修改 frontend 仓库代码与契约实现的 Sub-Agent"
 mode: subagent
 permission:
   edit:
-    "../frontend/**": allow
-    "openspec/**": deny   # 锁死单仓：全局放行了 openspec，writer 必须显式 deny
+    "**": deny                  # 兜底 deny 必须在前（opencode: 最后匹配获胜）
+    "**/frontend/**": allow      # 路径段锚定，项目根解析异常时仍命中
   external_directory:
-    "openspec/**": allow
-    "../**": allow
+    "**/openspec/**": allow
+    "**/frontend/**": allow
 ---
 
 # frontend Writer
@@ -138,6 +138,11 @@ permission:
 ```
 
 新增仓库时往 `.code-workspace` 的 `folders` 追加一项，运行 `npm run init -- --yes` 即可生成新的 writer。
+
+> **权限顺序陷阱**：opencode 的权限规则按"最后匹配获胜"求值。兜底 `**` deny 若排在
+> 具体 allow 之后，会吞掉 allow，导致编辑全被拒（现象：agent 只能用 bash 写文件）。
+> 生成的配置已按"兜底在前、具体在后"排列，并统一用 `**/` 路径段锚定——即使 opencode
+> 把项目根解析成 `/`，权限依然命中。若你手改过这些文件，重新运行 `npm run init` 恢复。
 
 ## 目录结构
 

@@ -3,9 +3,9 @@ description: 跨仓架构编排器——创建 OpenSpec SDD Change、拆分任�
 mode: primary
 permission:
   edit:
-    "openspec/**": allow
-    "openspec/changes/*/review-report.md": deny
     "**": deny
+    "**/openspec/**": allow
+    "**/openspec/changes/*/review-report.md": deny
   task:
     "*-writer": allow
     "reviewer": allow

@@ -397,17 +397,30 @@ function agentFrontmatter(description, permission) {
   return lines.join("\n");
 }
 
+/**
+ * 把绝对路径转成"路径段锚定"通配符：/a/b/fc-barcelona → 以双层星号开头、
+ * 以目录 basename 为路径段、再以双层星号结尾的 pattern。
+ *
+ * 为什么不用相对路径（如 ../fc-barcelona 那种）：opencode 的权限 pattern 会随
+ * 会话解析出的项目根变化；当项目根被解析成 / 时，相对 pattern 全部匹配不上，
+ * 最终落到兜底 deny，所有编辑被拒。路径段锚定 pattern 无论根是 workspace-root
+ * 还是 / 都命中。
+ */
+function segmentScope(absPath) {
+  return `**/${path.basename(absPath)}/**`;
+}
+
 function writerMarkdown(folder) {
   // relPath 为 "." 的 folder 不应生成 writer（那是 workspace-root 本身）
-  const scope = `${folder.relPath}/**`;
+  const scope = segmentScope(folder.absPath);
   const agentsRef = `${folder.relPath}/AGENTS.md`;
   const front = agentFrontmatter(
     `负责修改 ${folder.originalName} 仓库代码与契约实现的 Sub-Agent`,
     {
-      // 注意：全局配置放行了 openspec/**（Orchestrator 需要），此处必须显式 deny
-      // 才能把 Writer 锁死在本仓；规则按"最后匹配获胜"求值，顺序不可调换。
-      edit: { [scope]: "allow", "openspec/**": "deny" },
-      external_directory: { "openspec/**": "allow", "../**": "allow" },
+      // 铁律（opencode 语义：最后匹配获胜）：兜底 `**` deny 必须排在最前，
+      // 具体 allow 排在其后才生效；写反 = allow 被兜底 deny 吞掉。
+      edit: { "**": "deny", [scope]: "allow" },
+      external_directory: { "**/openspec/**": "allow", [scope]: "allow" },
     }
   );
   const body = [
@@ -437,8 +450,9 @@ function writerMarkdown(folder) {
 
 function reviewerMarkdown() {
   const front = agentFrontmatter(`负责跨仓一致性审查的 Reviewer Agent`, {
-    edit: { "openspec/changes/*/review-report.md": "allow", "**": "deny" },
-    external_directory: { "../**": "allow" },
+    // 兜底 deny 在前、唯一 allow 在后（最后匹配获胜）
+    edit: { "**": "deny", "**/openspec/changes/*/review-report.md": "allow" },
+    external_directory: { "**": "allow" },
   });
   const body = [
     `# Reviewer`,
@@ -477,15 +491,19 @@ function orchestratorConfig(writerNames) {
   }
   task["reviewer"] = "allow";
   return {
+    $schema: "https://opencode.ai/config.json",
     // 新会话默认进入 orchestrator agent；全局权限同时约束其他 agent。
     default_agent: "orchestrator",
     permission: {
+      // 兜底 deny 在前，具体 allow 在后（opencode: 最后匹配获胜）；
+      // 统一用 `**/` 路径段锚定，避免项目根解析异常时相对 pattern 失效。
       edit: {
-        "openspec/**": "allow",
         "**": "deny",
+        "**/openspec/**": "allow",
+        "**/openspec/changes/*/review-report.md": "deny",
       },
       external_directory: {
-        "../**": "allow",
+        "**": "allow",
       },
       task,
       bash: {
@@ -596,6 +614,8 @@ async function main() {
       'Root Orchestrator Agent (Primary) —— 跨仓架构编排器',
       `由 scripts/init.mjs 自动生成。writers: [${writerNames.join(", ") || "(none)"}]`,
       `workspace: ${path.basename(workspaceFile)}`,
+      '权限语义（opencode: 最后匹配获胜）：兜底 deny 在前、具体 allow 在后；',
+      'pattern 用路径段锚定（前缀带双层星号），项目根解析异常时仍能命中。',
     ]
   );
   if (args.dryRun) {
