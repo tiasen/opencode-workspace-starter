@@ -50,6 +50,8 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 ## 快速开始
 
 > **npx 可以直接指定 GitHub 仓库，无需发布到 npm。** 将 `YOUR_USER` 换成你的用户名（本仓库为 `tiasen`）。
+>
+> **前置要求**：Node >= 24（仓库含 `.nvmrc`）、可用的 git 与 npm。
 
 ### 0. 前置：安装 OpenSpec CLI
 

@@ -84,7 +84,7 @@ export function buildUserPackageJson(name, version, extra = {}) {
     type: "module",
     description: "Multi-repo workspace powered by opencode-workspace-starter",
     scripts: { ...FRAMEWORK_SCRIPTS, ...(extra.scripts ?? {}) },
-    engines: { node: ">=18.0.0" },
+    engines: { node: ">=24.0.0" },
     ...extra,
   };
 }

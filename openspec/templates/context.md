@@ -29,7 +29,7 @@
 
 ## 技术约束
 
-1. Node >= 18，前后端共享 `.nvmrc` 版本。
+1. Node >= 24，前后端共享 `.nvmrc` 版本。
 2. 兼容期两周：`/api/v1/session` 与 `/api/v2/session` 双写双读，之后下线 v1。
 3. 所有时间字段使用 ISO-8601 UTC 字符串，禁止时间戳数字。
 4. 本 Change 时间窗口：{start-date} 至 {end-date}，阻塞发布列车 {train-id}。

@@ -20,7 +20,8 @@
     "template.gitignore",
     "opencode.jsonc",
     "AGENTS.md",
-    "README.md"
+    "README.md",
+    ".nvmrc"
   ],
   "scripts": {
     "init": "node scripts/init.mjs",
@@ -32,7 +33,7 @@
     "hooks:install": "git config core.hooksPath .githooks"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "license": "MIT"
 }

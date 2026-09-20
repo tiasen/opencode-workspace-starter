@@ -36,7 +36,7 @@ import { syncConfig } from "./sync-config-lib.mjs";
 // 常量
 // ---------------------------------------------------------------------------
 
-const MIN_NODE_MAJOR = 18;
+const MIN_NODE_MAJOR = 24;
 const STARTER_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 // ---------------------------------------------------------------------------
