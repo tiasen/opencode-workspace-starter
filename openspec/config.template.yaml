@@ -3,7 +3,7 @@
 # 由 scripts/sync-config.mjs 同步到 openspec/config.yaml：
 #   - schema / rules / operations 三段以此为准（覆盖写入）；
 #   - 其余顶层键（如你自己加的 references、自定义键）原样保留。
-# 目标：让官方命令（/opsx:propose 等）按子应用生成各自的 delta spec，
+# 目标：让官方命令（/opsx-propose 等）按子应用生成各自的 delta spec，
 # 且实现阶段走本框架的 Task 派发而非当前 agent 直接动手。
 
 schema: spec-driven
@@ -13,6 +13,16 @@ context: |
   lives in its own repo listed in .code-workspace (the single source of directories).
   Tech stack and per-repo conventions live in each repo's own AGENTS.md — read it live.
   Execution is dispatched by the Orchestrator to per-repo Writer agents via the Task tool.
+
+  Workflow discipline (strict, must follow): phases are user-driven through the official
+  /opsx-* commands. Explore only discusses and writes no artifacts. Propose drafts the
+  artifacts and then STOPS for user review — never start implementation or dispatch in the
+  same response. Apply is the only phase that dispatches implementation. Archive runs only
+  on explicit user command. Never advance a phase on your own.
+
+  Review is conditional: invoke the reviewer only when the change touches a cross-repo
+  contract, involves two or more interacting repos, or must conform to another repo's spec
+  (e.g. a design repo's DESIGN.md). Otherwise skip review and record the reason in context.md.
 
 rules:
   proposal:
@@ -30,4 +40,9 @@ rules:
 operations:
   apply:
     guidance:
+      - Run only when the user explicitly invokes apply; never auto-advance into it.
       - Do not implement tasks directly in this session. Implementation is dispatched by the Orchestrator to per-repo Writer agents via the Task tool; see AGENTS.md section 4.
+      - Invoke the reviewer only when the review-trigger criteria are met (cross-repo contract, interacting repos, or another repo's spec); otherwise skip and record why in context.md. Scope the reviewer to the involved repos only, unless the user requests a full consistency check.
+  archive:
+    guidance:
+      - Run only when the user explicitly invokes archive; never archive automatically.

@@ -25,7 +25,7 @@ openspec/
 ```
 
 `openspec/templates/` 只存放框架扩展文件（`context.md`、`review-report.md`）与
-`tasks.md` 派发格式示例；官方四件套由 `/opsx:propose` 生成（规则见 `config.yaml`），详见
+`tasks.md` 派发格式示例；官方四件套由 `/opsx-propose` 生成（规则见 `config.yaml`），详见
 `template/README.md`。项目配置变更流程：改 `config.template.yaml` → 跑 `npm run sync:config`。
 
 ## 2. 命名规范
@@ -63,22 +63,47 @@ openspec/
 
 格式见 `templates/review-report.md`。仅 Reviewer 可写。`Status` 只能是 `PENDING | PASSED | FAILED` 之一。`FAILED` 时必须逐项列出 `Target`、`Issue`、`Action Required`。
 
-## 4. 生命周期
+## 4. 阶段门禁与生命周期（严格遵循官方 OpenSpec）
+
+阶段由用户通过官方 `/opsx-*` 命令显式驱动，**Orchestrator 不得自行推进阶段**：
+
+| 阶段 | 官方命令 | 说明 |
+|------|----------|------|
+| Explore | `/opsx-explore` | 只讨论、读代码、澄清；**不生成任何 spec** |
+| Propose | `/opsx-propose` | 生成官方四件套 + 框架扩展 `context.md`；**完成后停止，等用户 review** |
+| Update | `/opsx-update` | 按用户反馈修订 artifacts |
+| Apply | `/opsx-apply` | 本框架在此阶段用 Task 工具派发给各仓 Writer，并跑一致性审查闭环 |
+| Archive | `/opsx-archive` | delta 合并进基线；仅在用户显式命令后执行 |
+
+> 铁律：`/opsx-propose` 完成后必须停止（官方命令自身要求 "stop ... wait for a new user request"）；
+> 未经用户显式 `/opsx-apply`，不得派发任何 Writer；未经用户显式 `/opsx-archive`，不得归档。
+
+内部细粒度状态（仅用于描述，**不作为自动推进依据**）：
 
 ```text
-draft → tasks-dispatched → implementing → reviewing → (remediating → reviewing)* → done
+draft → awaiting-review → applying → reviewing → (remediating → reviewing)* → reviewed → archived
 ```
 
-- `draft`：proposal / context / design / specs 编写中，尚未派发。
-- `tasks-dispatched`：`tasks.md` 已生成并已通过 Task 工具派发。
-- `implementing`：Writer 执行中。
+- `draft`：Propose 进行中。
+- `awaiting-review`：artifacts 就绪，等用户 review（**禁止自动进入 Apply**）。
+- `applying`：Apply 阶段，正在派发。
 - `reviewing`：已唤起 `@reviewer`，等待 `review-report.md`。
 - `remediating`：Review FAILED，已生成 Remediation Task 并重新派发。
-- `done`：Review PASSED，Orchestrator 已总结汇报。
+- `reviewed`：Review PASSED，等用户显式 archive。
+- `archived`：已归档。
 
-状态不单独存储，通过 `tasks.md` 中各 Task 的 Status 与 `review-report.md` 的 Status 推导。
+状态不单独存储，通过 `tasks.md` 各 Task 的 Status 与 `review-report.md` 的 Status 推导。
 
-## 5. 权限规则
+## 5. 审查触发判定
+
+跨仓一致性审查**不是每次必跑**，由 Orchestrator 按"改动性质 + 涉及仓 + 各仓 `AGENTS.md` 要求"判定，并记入 `context.md`：
+
+- **触发**：跨仓契约变更（接口 / 类型 / 事件 / 协议 / 配置）；≥2 仓存在调用或上下游关系；改动须符合他仓拥有的规范（如设计仓 `DESIGN.md`）；目标仓 `AGENTS.md` 要求审查；用户显式要求。
+- **可跳过（须记理由）**：单仓内部且不改对外契约（纯 UI / 样式 / 文案 / 内部重构）；临时或一次性产物（脚本、实验、不交付）；仅注释 / 文档措辞；用户声明无需审查。
+- **范围**：默认只覆盖涉及仓与对应 Writer；仅用户强制"全量一致性检查"时覆盖所有业务仓。
+- 判不准时倾向执行，并在 Propose 的 review gate 呈给用户确认。
+
+## 6. 权限规则
 
 - Orchestrator：可写本目录下除 `review-report.md` 外的所有文件。
 - Writer：只读本目录（通过 `external_directory` 获得），不可写。

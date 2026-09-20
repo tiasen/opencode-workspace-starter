@@ -116,7 +116,7 @@ export function syncConfig({ root, check = false, templatePath = null }) {
       messages.push(`已建出: ${configPath}`);
     }
     messages.push(
-      `提示：如需官方 /opsx:* 命令集成，请手动运行一次 \`openspec init\`（需先安装 CLI）。`
+      `提示：如需官方 /opsx-* 命令，装好 CLI 后运行 openspec init --tools opencode --force。`
     );
     return { configPath, templatePath: template, changed: true, bootstrapped: true, messages };
   }

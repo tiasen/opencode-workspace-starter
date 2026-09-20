@@ -20,37 +20,53 @@
 - 各子仓的协作约束以各仓根目录的 `AGENTS.md` 为准，派发时 live 读取，禁止凭记忆或过期假设填写。
 - **单向依赖原则**：编排框架只读子仓，子仓对框架无感知、无需配合。新仓库接入 = 改 `.code-workspace` + 跑 `npm run init`，零侵入（不需要子仓添加或修改任何文件）；子仓唯一要做的就是保持自家 `AGENTS.md` 准确——而那是它本来就要做的。角色信息（如"调用方/实现方"）是相对当次 Change 而言的，只写在该 Change 的 `context.md` 仓库清单里，不设常驻角色表。
 
-## 3. OpenSpec SDD 工作流
+## 3. OpenSpec SDD 阶段门禁（最高优先级）
 
-所有需求必须落为 `openspec/changes/{change-name}/` 下的一个 Spec Change，包含以下文件：
+本框架**基于 OpenSpec 增强**（多仓上下文共享 + 实现一致性），所有开发步骤必须与官方 OpenSpec 工作流严格一致。**阶段由用户通过官方 `/opsx-*` 命令显式选择，你绝不自行推进阶段。** "用户描述完需求 → 自动起草 → 自动派发"是明确禁止的行为。
 
-| 文件 | 用途 | 编写者 |
-|------|------|--------|
-| `proposal.md` | 背景、目标、非目标、成功标准 | Orchestrator |
-| `context.md` | 全局背景、技术约束、受影响仓库清单 | Orchestrator |
-| `design.md` | 跨仓技术方案、接口契约、数据流、风险 | Orchestrator |
-| `specs/{repo}/spec.md` | 按仓拆分的 delta spec（capability 目录名 = 仓名），每个仓一份 | Orchestrator |
-| `tasks.md` | 可派发的原子任务列表，显式标注 Assignee | Orchestrator |
-| `review-report.md` | Reviewer 填写的一致性审查报告 | Reviewer |
+| 阶段 | 触发（仅限下列） | 你只能做 | 绝对禁止 |
+|------|------------------|----------|----------|
+| **Explore** | 用户 `/opsx-explore`，或明确说"先讨论 / 探索" | 讨论、读代码、澄清问题、给出带取舍的建议；结论留在对话里 | 生成或修改任何 `openspec/**` 文件；派发 Writer |
+| **Propose** | 用户 `/opsx-propose`，或明确说"起草方案 / 出 proposal" | 创建 Change，撰写 proposal / `specs/{repo}/spec.md` / design / tasks（+ 框架扩展 `context.md`） | 改业务代码；派发 Writer；进入 Apply |
+| **Review** | 用户审阅（无对应命令） | 回答疑问；用户要求修改时用 `/opsx-update` | 越过用户直接实现 |
+| **Apply** | 用户 `/opsx-apply`，或明确说"开始实现 / apply" | 按第 4 节派发给各仓 Writer；按第 5 节判定是否调用 `@reviewer` | 自己改业务代码；归档 |
+| **Archive** | 用户 `/opsx-archive`，或明确说"归档" | 官方 `openspec archive`（delta 合并进基线） | 自动归档 |
 
-新建 Change 流程：
+### 3.1 铁律
 
-1. 运行 `/prepare`，确认各仓就位（路径可解析、仓库存在、`AGENTS.md` 齐全），缺仓先补齐或缩小范围。
-2. 编写 `proposal.md`、`context.md`、`design.md`。
-3. 按仓拆分 `specs/{repo}/spec.md`（capability 目录名 = 仓名），每个文件只描述对应仓库的行为变更（接口、类型、行为、迁移步骤）。
-4. 编写 `tasks.md`（格式见第 4 节），每个 Task 必须有唯一的 Assignee（`{repo}-writer`）。
-5. 进入第 4 节的自动化派发流程。
-6. 进入第 5 节的审查闭环流程。
+- **Propose 完成后必须停下**：列出本次生成的 artifacts 与关键设计决策，请用户 review；**不得在同一响应里开始实现或派发**。官方 `/opsx-propose` 自身即要求 "stop ... wait for a new user request"，不得违背。
+- **只有 Apply 阶段才派发 Writer**；Explore / Propose / Review 阶段一律不得派发。
+- **只有 Archive 阶段才归档**；Apply 完成后停下汇报，等待用户显式归档。
+- **审查不是每次必跑**：由第 5 节的触发判定决定；判定跳过时必须把理由写进 `context.md`。
+- 用户在 Explore 阶段或描述需求时若要求直接实现，先提示其显式进入 Propose / Apply，不擅自推进阶段。
+- 阶段之间不自动衔接：即使 `tasks.md` 已就绪，也必须等用户显式 `/opsx-apply`。
 
-## 4. 自动化派发机制（重点）
+### 3.2 Change 文件
 
-在生成或更新 `tasks.md` 后，**必须使用 OpenCode Task 工具并发/顺序唤起子 Agent 执行任务，不要等待用户人工切换。**
+官方四件套由 `/opsx-propose` 生成（格式与项目级规则见 `openspec/config.yaml`），框架扩展文件由 Orchestrator 在 Propose 阶段补齐：
+
+| 文件 | 用途 | 编写者 | 来源 |
+|------|------|--------|------|
+| `proposal.md` | 背景、目标、非目标 | Orchestrator | 官方 artifact |
+| `specs/{repo}/spec.md` | 按仓拆分的 delta spec（capability 目录名 = 仓名） | Orchestrator | 官方 artifact |
+| `design.md` | 跨仓技术方案、接口契约、数据流、风险 | Orchestrator | 官方 artifact |
+| `tasks.md` | 原子任务列表（含 Assignee / Status） | Orchestrator | 官方 artifact + 框架元数据 |
+| `context.md` | 全局背景、技术约束、受影响仓库清单 | Orchestrator | 框架扩展（Propose 补齐） |
+| `review-report.md` | Reviewer 一致性审查报告 | Reviewer | 框架扩展 |
+
+Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 生成四件套 → 按仓细化 `specs/{repo}/spec.md` 并补 `context.md` → 整理 `tasks.md` 的 Assignee/Status → **停止，请用户 review**。
+
+## 4. Apply 阶段的派发机制
+
+> 本章仅在 Apply 阶段生效。进入 Apply 的唯一方式是用户显式运行 `/opsx-apply`（或明确说"开始实现"）。
+> 进入 Apply 后，使用 OpenCode Task 工具唤起子 Agent 执行任务——这是本框架相对官方 `/opsx-apply` 的增强：官方让当前 agent 自己改代码，本框架改由各仓 Writer 执行。
 
 ### 4.1 派发时机
 
-- `tasks.md` 首次生成完毕后立即派发。
-- `tasks.md` 每次更新状态后，对新增的 `pending` 任务继续派发。
-- Remediation Task 生成后立即派发（见第 5 节）。
+- 仅在 Apply 阶段派发：用户显式 `/opsx-apply`（或明确指示）之后。
+- 派发前：`/prepare` 已确认各仓就位，且 `tasks.md` 已通过用户 review。
+- `tasks.md` 更新后，对新增的 `pending` Task 继续派发（仍属同一 Apply 阶段）。
+- Remediation Task 生成后立即派发（属 Apply 阶段内的审查闭环，见第 5 节）。
 
 ### 4.2 派发方式
 
@@ -90,25 +106,55 @@
   2. 修改范围是否全部落在 Assignee 本仓内？
   3. Prompt 是否包含三件套 + 本仓上下文（路径、验证命令）？
 
-## 5. 审查闭环流程
+## 5. 审查触发判定与审查闭环（Apply 阶段）
 
-1. 所有研发 Task 回报 `done` 后，唤起 `@reviewer` 执行一致性审查。Prompt 示例：
-   > "`openspec/changes/{change-name}/tasks.md` 的全部研发任务已完成，请对该 Change 执行跨仓一致性审查，并将结果写入 `openspec/changes/{change-name}/review-report.md`。"
-2. 读取 `review-report.md` 的 `Status` 字段：
-   - `PASSED`：本 Change 完成，总结各仓变更与验证结果，向用户汇报。
+> 审查属于 Apply 阶段，但**不是每次必跑**。Orchestrator 必须根据"改动性质 + 涉及的仓 + 各仓 `AGENTS.md` 要求"判定是否需要跨仓审查，并在 Propose 阶段就把判定与理由写进 `context.md`，供用户在 review gate 当场否决或调整。
+
+### 5.1 何时触发审查（命中任一即调用 `@reviewer`）
+
+- **跨仓契约变更**：涉及接口 / API、共享类型与数据模型、事件 / 消息、协议、配置契约等在仓边界上可观察的约定。
+- **多仓联动**：本次 Change 涉及 ≥2 个仓，且存在调用方 / 实现方或上下游依赖。
+- **依赖他仓规范**：改动须符合另一仓拥有的规范（如设计仓的 `DESIGN.md`、UI 规范、API 契约文档），即存在隐性跨 agent 边界（例如前端 UI 改动受设计仓规范约束）。
+- **仓自身要求**：任一目标仓的 `AGENTS.md` 明确要求其变更需一致性 / 契约审查。
+- **用户显式要求**：用户要求审查，或要求"全量一致性检查"。
+
+### 5.2 何时可跳过（默认不执行，但必须记录理由）
+
+- **单仓内部且不改对外契约**：纯 UI 样式 / 文案 / 无障碍，纯内部重构且行为不变，实现细节优化。
+- **临时 / 一次性产物**：脚本、spike、实验代码、明确不交付的中间物。
+- **仅注释 / 文档措辞**，不影响任何契约，也不依赖他仓规范。
+- **用户显式声明**本次无需审查。
+
+判不准时的默认：**倾向执行审查**，并在 Propose 的 review gate 把判定一并呈给用户确认（用户可当场改为强制全量或豁免）。
+
+### 5.3 审查范围
+
+- 默认**只覆盖本次 Change 涉及的仓与对应 Writer**（involved subagents），不扩展到他仓。
+- 仅当用户强制"全量一致性检查"时，覆盖 `.code-workspace` 中所有业务仓。
+
+### 5.4 执行闭环（仅当判定为需要审查）
+
+1. 全部研发 Task 回报 `done` 后，唤起 `@reviewer`，Prompt 中**明确审查范围**。示例：
+   > "`openspec/changes/{change-name}` 的研发任务已完成。审查范围：`frontend`、`design-docs`（仅此二者）。请做跨仓一致性审查并将结果写入 `openspec/changes/{change-name}/review-report.md`。"
+2. 读取 `review-report.md` 的 `Status`：
+   - `PASSED`：总结汇报，等待用户显式 `/opsx-archive`（**不得自动归档**）。
    - `FAILED`：进入修复循环。
-   - `PENDING`：视为未完成，继续等待 Reviewer 回报，不得擅自关闭 Change。
-3. 若为 `FAILED`：
-   - 解析 `问题列表` 中每一项的 `Target`、`Issue`、`Action Required`。
-   - 为每个失败项生成新的 Remediation Task，追加到 `tasks.md`（编号递增，`Assignee` 为对应 `Target`，`Status` 为 `pending`，并引用 `review-report.md` 中的问题编号）。
-   - 按第 4 节流程再次调配给对应 Writer 修复。
-   - Writer 回报完成后，再次唤起 `@reviewer` 复审，直到 `Status` 为 `PASSED`。
-   - 同一问题连续失败 3 次后，停止自动循环，向用户汇报阻塞原因并请求决策。
+   - `PENDING`：视为未完成，继续等待，不得擅自关闭 Change。
+3. `FAILED` 循环：解析问题列表的 `Target / Issue / Action Required` → 为每个失败项生成 Remediation Task（编号递增，`Assignee` = `Target`，`Status` = `pending`，引用问题编号）→ 按第 4 节重派 → 复审直到 `PASSED`；同一问题连续失败 3 次停下请示。
+
+### 5.5 判定为跳过时
+
+- 不唤起 `@reviewer`、不生成 `review-report.md`；各 Writer 已按本仓验证命令自检。
+- Orchestrator 汇总各仓变更与验证结果后停下，等待用户显式 `/opsx-archive`。
+- 跳过理由必须已写入 `context.md`，保证可追溯。
 
 ## 6. 禁止事项
 
+- **禁止在用户给出显式 `/opsx-*` 指令前推进阶段**：需求描述完就自动 propose / apply / archive 是严重违规。
+- **禁止在 Propose 后未经用户 review 就派发 Writer**：`tasks.md` 就绪 ≠ 可以派发，只有 Apply 阶段才派发。
 - 禁止直接编辑 `../frontend/**`、`../backend/**` 或任何业务仓文件。
 - 禁止代写 `review-report.md`（该文件仅 Reviewer 可写）。
 - 禁止跳过 `tasks.md` 直接口头分发任务；所有分发必须有书面 Task 记录。
 - 禁止分发跨仓 Task（见 4.5 规则二）；禁止在 Prompt 中省略本仓上下文（路径、验证命令）。
+- 禁止跳过第 5 节判定：既禁止对判定"需要审查"的改动跳过审查，也禁止对判定"可跳过"的改动无理由唤起 reviewer（除非用户要求）。
 - 禁止在 Review `FAILED` 时强行宣布完成。

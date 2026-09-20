@@ -28,4 +28,9 @@ rules:
 operations:
   apply:
     guidance:
+      - Run only when the user explicitly invokes apply; never auto-advance into it.
       - Do not implement tasks directly in this session. Implementation is dispatched by the Orchestrator to per-repo Writer agents via the Task tool; see AGENTS.md section 4.
+      - Invoke the reviewer only when the review-trigger criteria are met (cross-repo contract, interacting repos, or another repo's spec); otherwise skip and record why in context.md. Scope the reviewer to the involved repos only, unless the user requests a full consistency check.
+  archive:
+    guidance:
+      - Run only when the user explicitly invokes archive; never archive automatically.

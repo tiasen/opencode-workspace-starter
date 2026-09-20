@@ -3,7 +3,9 @@
 - **Reviewer**: reviewer-agent
 - **Status**: PENDING
 - **Timestamp**: {timestamp}
+- **审查范围**: {涉及的仓，如 frontend、design-docs}
 
+> 仅在 `context.md` 的 Review 判定为"需要审查"时才生成本文件，审查范围以 `context.md` 为准。
 > `Status` 只能取 `PENDING | PASSED | FAILED` 之一。
 > 本文件仅 Reviewer 可写，Orchestrator 只读并据此决定是否生成 Remediation Task。
 

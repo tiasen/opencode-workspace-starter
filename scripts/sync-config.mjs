@@ -8,7 +8,7 @@
  *   - openspec/config.yaml 缺失 → 按模板全文建出（含 openspec/specs、openspec/changes
  *     占位），并提示日后补跑 `openspec init` 安装官方命令集成。
  *   - 不自动运行 `openspec init`：它是第三方交互式脚手架，自动跑有覆盖风险；
- *     需要官方 /opsx:* 命令请手动执行一次。
+ *     需要官方 /opsx-* 命令请装好 CLI 后执行 openspec init --tools opencode --force。
  *
  * 用法:
  *   node scripts/sync-config.mjs [--root <path>] [--check] [--help]

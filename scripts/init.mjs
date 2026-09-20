@@ -638,7 +638,7 @@ async function main() {
       for (const line of result.messages) log(`  ${line}`);
     } catch (err) {
       warn(`OpenSpec 配置同步失败: ${err.message}`);
-      warn("请手动运行 npm run sync:config；如需官方 /opsx:* 命令，再手动运行 openspec init。");
+      warn("请手动运行 npm run sync:config；如需官方 /opsx-* 命令，装好 CLI 后运行 openspec init --tools opencode --force。");
     }
   }
 
@@ -646,8 +646,8 @@ async function main() {
   log("完成。下一步:");
   log("  1. 检查 .opencode/agents/ 下生成的 *-writer.md 作用域是否正确");
   log("  2. 在 workspace-root 运行 /prepare 确认各仓就位");
-  log("  3. 如需官方 /opsx:* 命令，手动运行一次 openspec init（需先安装 CLI）");
-  log("  4. 新建 Spec Change：用 /opsx:propose 起草，扩展文件见 openspec/templates/");
+  log("  3. 装好官方 CLI 后运行 openspec init --tools opencode --force（生成 /opsx-* 命令）");
+  log("  4. 新建 Spec Change：用 /opsx-propose 起草，扩展文件见 openspec/templates/");
 }
 
 main().catch((err) => {

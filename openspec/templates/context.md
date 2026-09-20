@@ -20,6 +20,13 @@
 - **frontend**：React + TypeScript，使用 `npm run typecheck` 做类型检查，API 客户端位于 `src/api/`，禁止手写后端已提供的类型。
 - **backend**：Node + Express，使用 `npm test` 做契约测试，路由定义位于 `src/routes/`，所有对外接口必须同步更新 `openapi.yaml`。
 
+## Review 判定
+
+- **是否需要跨仓审查**: 是 / 否
+- **触发条件**: {命中的条件，如"调用方 / 实现方契约变更"；跳过则写"单仓内部、不改对外契约"}
+- **审查范围（仅需审查时）**: {涉及的仓，如 `frontend`、`design-docs`；用户强制全量时写 `.code-workspace` 全部业务仓}
+- **判据 / 理由**: {引用各仓 `AGENTS.md` 要求或改动性质}
+
 ## 技术约束
 
 1. Node >= 18，前后端共享 `.nvmrc` 版本。

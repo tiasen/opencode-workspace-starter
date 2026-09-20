@@ -10,17 +10,24 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 ├── opencode.jsonc           # 主配置：openspec 可写、业务仓只读、task 授权
 ├── .opencode/
 │   ├── agents/
-│   │   ├── orchestrator.md      # Orchestrator 主 agent（mode: primary，默认进入）
-│   │   ├── {repo}-writer.md # 每个仓库一个 Writer（mode: subagent，锁定单仓，由 init 生成）
-│   │   └── reviewer.md      # 跨仓审查员（mode: subagent，只写 review-report.md）
-│   └── commands/
-  │       └── prepare.md       # /prepare 命令：workspace 就位检查（无状态，不写文件）
+│   │   ├── orchestrator.md          # Orchestrator 主 agent（mode: primary，默认进入）
+│   │   ├── {repo}-writer.md         # 每个仓库一个 Writer（由 npm run init 生成）
+│   │   └── reviewer.md              # 跨仓审查员（mode: subagent）
+│   ├── commands/
+│   │   ├── prepare.md               # /prepare：workspace 就位检查（无状态）
+│   │   └── opsx-*.md                # 官方 OpenSpec 命令（openspec init 生成）
+│   └── skills/                      # 官方 OpenSpec skills（openspec init 生成）
 ├── bin/create.mjs           # scaffolding 入口：npx github:user/repo 即用
 ├── scripts/init.mjs         # init 脚本：从 .code-workspace 派生全部 Agent 配置
 └── openspec/
-    ├── FRAMEWORK.md         # 框架编排层规范
-    ├── config.yaml          # OpenSpec 生效配置（npm run sync:config 同步）
-    └── changes/{name}/      # 每个需求一个 Change（官方四件套 + context/review-report 扩展）
+    ├── FRAMEWORK.md               # 框架编排层规范
+    ├── config.yaml                # OpenSpec 生效配置（npm run sync:config 同步）
+    ├── config.template.yaml       # 配置模板（rules 让官方命令按仓生成 spec）
+    ├── specs/                     # 基线 spec（openspec archive 维护）
+    ├── templates/                 # 框架扩展模板（context / review-report / tasks 派发示例）
+    └── changes/
+        ├── {name}/                # 每个需求一个 Change
+        └── archive/               # 已归档 Change（openspec archive 生成）
 ```
 
 > 约束：opencode 只识别 `.opencode/agents/*.md` 与 `.opencode/commands/*.md`（Markdown + frontmatter）。
@@ -38,48 +45,82 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 
 ## 快速开始
 
-> **npx 可以直接指定 GitHub 仓库，无需发布到 npm。** 把本仓库推到 GitHub 后即可使用（将 `YOUR_USER` 换成你的用户名）。
+> **npx 可以直接指定 GitHub 仓库，无需发布到 npm。** 将 `YOUR_USER` 换成你的用户名（本仓库为 `tiasen`）。
+
+### 0. 前置：安装 OpenSpec CLI
+
+`/opsx-*` 命令由官方 CLI 生成，先装一次（不装也能用本框架的编排部分，只是没有官方起草命令）：
 
 ```bash
-# 方式 A：从 GitHub 一键 scaffolding（推荐）
+npm install -g @fission-ai/openspec
+openspec --version
+```
+
+### 1. 生成 workspace
+
+```bash
+# 方式 A：从 GitHub 一键 scaffolding
 npx github:YOUR_USER/opencode-workspace-starter my-project
 cd my-project
-# 编辑 my-project.code-workspace 的 folders（相对该文件位置的路径，已自动由模板生成）
+# → 自动生成 my-project.code-workspace，编辑其中的 folders 指向真实仓库
 
-# 方式 A2：workspace 文件先行（你已有 .code-workspace 时）
+# 方式 A2：已有 .code-workspace（workspace 文件先行）
 mkdir my-project && cd my-project
 # 先把你的 my-project.code-workspace 放入当前目录（会被保留，绝不覆盖）
 npx github:YOUR_USER/opencode-workspace-starter . --init
-# 仅含 .code-workspace / .git 的目录无需 --force；已有其他文件时才需加 --force
 
-# 方式 B：本地已有本仓库时直接运行
+# 方式 B：本地已有本仓库
 node bin/create.mjs my-project --init
-
-# 生成 Agent 配置（末尾自动同步 openspec/config.yaml；官方 /opsx:* 命令需手动跑一次 openspec init）
-npm run init -- --yes
-
-# 启动 OpenCode（workspace-root），确认各仓就位
-# 新会话默认即 orchestrator agent（只读业务仓、通过 Task 调度）；切回 build 请用 Tab
-opencode run /prepare
-
-# 新建一个 Change（官方命令起草四件套，规则来自 openspec/config.yaml）
-/opsx:propose my-first-change
-# 随后由 Orchestrator 补 context.md、按 Assignee 规则整理 tasks.md，再 Task 派发
 ```
+
+### 2. 初始化 OpenSpec（在 workspace-root 执行一次）
+
+```bash
+openspec init --tools opencode --force
+# 生成 .opencode/commands/opsx-*.md 与 .opencode/skills/*；
+# 已存在的 openspec/config.yaml 会被保留，不会覆盖。
+```
+
+### 3. 生成 Agent 与项目配置
+
+```bash
+npm run init -- --yes   # 派生 .opencode/agents/*.md、opencode.jsonc，并同步 openspec/config.yaml
+npm run sync:config     # 幂等；只把 config.template.yaml 的 schema/rules/operations 三段同步过去
+```
+
+> 若第 1 步用了 `--init`，`npm run init` 已自动跑过一次；此处重跑幂等，无副作用。
+
+### 4. 开始一个 Change（在 opencode TUI 内输入斜杠命令）
+
+```bash
+opencode                # 启动 TUI；新会话默认进入 orchestrator agent
+```
+
+```text
+/prepare                          # 确认各仓就位（路径可解析、AGENTS.md 齐全）
+/opsx-propose my-first-change     # 官方命令起草 proposal + specs/<repo>/spec.md + design + tasks
+```
+
+> `/opsx-propose` 等命令在 opencode 里是连字符形式（Claude Code 里才是 `/opsx:propose`），
+> 且需先完成第 2 步。阶段严格跟随官方命令，**主 agent 不会自动推进**：
+> `/opsx-explore`（只讨论，不生成 spec）→ `/opsx-propose`（起草 artifacts 后**停下等你 review**）
+> → `/opsx-apply`（此时才用 Task 工具派发给各仓 Writer）→ `/opsx-archive`（显式归档）。
 
 可用变体：
 
 ```bash
 npx -y github:YOUR_USER/opencode-workspace-starter my-project --init  # 跳过安装确认并自动跑 init
-npx github:YOUR_USER/opencode-workspace-starter#v0.2.0 my-project      # 指定分支 / tag / commit
+npx github:YOUR_USER/opencode-workspace-starter#v0.1.1 my-project      # 指定分支 / tag / commit
 node bin/create.mjs my-project --force                                # 目录含非 workspace 文件时覆盖（同名文件会被替换）
 ```
 
 原理：`npx <user>/<repo>` 会从 GitHub 拉取仓库打包，运行 `package.json` 的 `bin`（`create-opencode-workspace`，即 `bin/create.mjs`），把整套模板拷贝到目标目录。私有仓库需要本机有 git/ssh 凭证。
 
-## Orchestrator 如何通过 Task 工具自动调度 Writer / Reviewer
+## Apply 阶段：Orchestrator 如何调度 Writer / Reviewer
 
-这是本框架与传统“人工切换 Agent”模式的本质区别：**Orchestrator 在生成 `tasks.md` 后立即使用 OpenCode Task 工具唤起子 Agent，无需用户手动介入。**
+阶段严格跟随官方命令，由用户显式驱动：`/opsx-explore`（只讨论）→ `/opsx-propose`（起草后停下等 review）→ `/opsx-apply`（才派发）→ `/opsx-archive`（显式归档）。**主 agent 不会在你确认方案前自动起草或派发。**
+
+一旦进入 Apply 阶段，Orchestrator 使用 OpenCode Task 工具唤起子 Agent，无需你手动切换 agent：
 
 ```text
 Orchestrator（Primary）
@@ -87,18 +128,19 @@ Orchestrator（Primary）
   ├─→ @frontend-writer  "请读取并执行 openspec/changes/X/tasks.md 中的 Task 2（含 context/design/specs 上下文），完成后回报验证结果"
   ├─→ @backend-writer   "请读取并执行 openspec/changes/X/tasks.md 中的 Task 1（含 context/design/specs 上下文），完成后回报验证结果"
   │  （Writer 各自回报：修改文件列表、验证结果、风险）
-  │  Task 工具唤起审查
-  └─→ @reviewer         "tasks.md 已完成，请审查并写入 review-report.md"
+  │  （按 Review 判定）需要审查时唤起 reviewer，范围限涉及仓
+  └─→ @reviewer         "已完成，审查范围：frontend、design-docs；写入 review-report.md"
         │  PASSED → Change 完成，总结汇报
         │  FAILED → Orchestrator 生成 Remediation Task → 重新派发 Writer → 再次 Review
 ```
 
 - 传递给 Writer 的 Prompt 必须包含三件套：`context.md`（全局背景）+ `design.md`（跨仓方案）+ `specs/{target}/spec.md`（专属 delta spec，主文件）。
 - `tasks.md` 中每个 Task 有唯一 `Assignee`（如 `frontend-writer`）与 `Status`（`pending → in_progress → done/failed`）；Orchestrator 派发前置 `in_progress`，收到回报后更新。
+- **审查按 `context.md` 的 Review 判定执行，不是每次必跑**：跨仓契约变更、多仓联动、或需符合他仓规范时才调用 `@reviewer`，且范围只限涉及仓；纯 UI / 脚本 / 临时修复等单仓内部改动可跳过并记录理由。用户可强制全量一致性检查。
 - Review `FAILED` 时，Orchestrator 解析 `review-report.md` 问题列表的 `Target / Issue / Action Required`，追加编号递增的 Remediation Task 并重新派发，直到 `PASSED`（同一问题连续失败 3 次后停下并请求人工决策）。
 - 详细规则见 `AGENTS.md` 第 4–5 节。
 
-## /prepare 与上下文索引
+## /prepare 与各仓就位检查
 
 `/prepare`（定义见 `.opencode/commands/prepare.md`）是无状态检查：只读业务仓、不写任何文件，结果对话内回报：
 
@@ -112,9 +154,9 @@ Orchestrator（Primary）
 
 | Agent | `mode` | 可写 | 只读 | 可唤起 |
 |-------|--------|------|------|--------|
-| Orchestrator | primary | `openspec/**`（除 review-report） | 所有仓 | `*-writer`、`reviewer` |
-| `{repo}-writer` | subagent | 本仓 `{path}/**` | `openspec/**` | — |
-| reviewer | subagent | `openspec/changes/*/review-report.md` | 所有仓 | — |
+| Orchestrator | primary | `**/openspec/**`（除 review-report） | 所有仓 | `*-writer`、`reviewer` |
+| `{repo}-writer` | subagent | 本仓 `**/{repo}/**` | `**/openspec/**` | — |
+| reviewer | subagent | `**/openspec/changes/*/review-report.md` | 所有仓 | — |
 
 ### Writer 文件示例（由 `init` 生成）
 
@@ -159,8 +201,10 @@ opencode-workspace-starter/
 │  ├─ agents/
 │  │  ├─ orchestrator.md            # Orchestrator 主 agent（mode: primary）
 │  │  └─ reviewer.md                # 跨仓审查员（{repo}-writer.md 由 init 按仓生成）
-│  └─ commands/
-│     └─ prepare.md                  # /prepare 命令（含 frontmatter description）
+│  ├─ commands/
+│  │  ├─ prepare.md                  # /prepare 命令（含 frontmatter description）
+│  │  └─ opsx-*.md                   # 官方命令（openspec init 生成）
+│  └─ skills/                        # 官方 skills（openspec init 生成）
 ├─ scripts/
 │  ├─ init.mjs                       # 初始化：派生 agents + opencode.jsonc，末尾自动 sync:config
 │  ├─ sync-config.mjs                # 同步 openspec/config.yaml（npm run sync:config）
@@ -173,7 +217,7 @@ opencode-workspace-starter/
 │  │  └─ .gitkeep
 │  ├─ changes/
 │  │  └─ .gitkeep
-│  └─ templates/                   # 仅框架扩展：context.md / review-report.md / tasks 派发示例
+│  └─ templates/                     # 仅框架扩展：context.md / review-report.md / tasks 派发示例
 │     ├─ README.md
 │     ├─ context.md
 │     ├─ tasks.md
