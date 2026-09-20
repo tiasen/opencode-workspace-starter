@@ -30,6 +30,10 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
         └── archive/               # 已归档 Change（openspec archive 生成）
 ```
 
+> **视角说明**：上面的树是用户 scaffold 后的 workspace-root。**本仓库是源码**：面向用户的模板
+> 目录是 `opencode/`（无点），scaffold / upgrade 时映射为 `.opencode/`；源码自己的 `.opencode/`
+> 只是本机开发运行时目录，不提交、也不复制给用户。映射清单见 `scripts/template-map.mjs`。
+>
 > 约束：opencode 只识别 `.opencode/agents/*.md` 与 `.opencode/commands/*.md`（Markdown + frontmatter）。
 > 不要在 `.opencode/agents/` 下放 `README.md` 之类的说明文件——每个 `.md` 都会被注册成一个 agent。
 > 不要手动编辑 `.opencode/agents/` 下的路径；仓库增删改请更新 `.code-workspace` 后重新运行 `npm run init`，
@@ -106,11 +110,20 @@ opencode                # 启动 TUI；新会话默认进入 orchestrator agent
 > `/opsx-explore`（只讨论，不生成 spec）→ `/opsx-propose`（起草 artifacts 后**停下等你 review**）
 > → `/opsx-apply`（此时才用 Task 工具派发给各仓 Writer）→ `/opsx-archive`（显式归档）。
 
+### 5. 保持更新（已安装用户，无需再 npx）
+
+```bash
+npm run check:update   # 对比本地与远端最新 tag
+npm run upgrade        # 覆盖框架文件到最新版
+```
+
+详见下方「版本与升级」。
+
 可用变体：
 
 ```bash
 npx -y github:YOUR_USER/opencode-workspace-starter my-project --init  # 跳过安装确认并自动跑 init
-npx github:YOUR_USER/opencode-workspace-starter#v0.1.1 my-project      # 指定分支 / tag / commit
+npx github:YOUR_USER/opencode-workspace-starter#v0.2.0 my-project      # 指定分支 / tag / commit
 node bin/create.mjs my-project --force                                # 目录含非 workspace 文件时覆盖（同名文件会被替换）
 ```
 
@@ -186,29 +199,67 @@ permission:
 > 生成的配置已按"兜底在前、具体在后"排列，并统一用 `**/` 路径段锚定——即使 opencode
 > 把项目根解析成 `/`，权限依然命中。若你手改过这些文件，重新运行 `npm run init` 恢复。
 
+## 版本与升级
+
+框架版本记录在 workspace-root 的 `package.json.version`（由框架管理，请勿手改）。
+
+```bash
+npm run check:update            # 对比本地与远端最新 tag，看是否有新版本
+npm run upgrade                 # 覆盖框架文件到最新版，不动你的文件
+npm run upgrade -- --dry-run    # 先预览会覆盖哪些文件
+```
+
+升级只覆盖「框架拥有」的文件（`opencode/* → .opencode/*`、`scripts/*`、`AGENTS.md`、
+`openspec/{FRAMEWORK.md, config.template.yaml, templates/*}`），并合并 `package.json` 的
+框架 scripts 与 version；**绝不触碰**你的 `*.code-workspace`、`opencode.jsonc`、
+`openspec/config.yaml`、`openspec/{specs,changes}/**`、`.opencode/agents/*-writer.md`、
+`.opencode/commands/opsx-*.md`、`.opencode/skills/**`。升级后建议跑一次 `npm run init -- --yes`。
+
+## 维护者指南（开发本框架）
+
+- **模板 vs 开发目录**：用户模板在 `opencode/`（无点，提交）；仓库根的 `.opencode/` 是本机
+  开发/运行时目录，已 gitignore，不要提交、也不要复制给用户。映射集中在 `scripts/template-map.mjs`。
+- **版本纪律**：任何面向用户的改动都必须提升 `package.json.version`，否则 pre-push 拒绝：
+  ```bash
+  npm run hooks:install   # 一次性：git config core.hooksPath .githooks
+  npm version patch       # 或 minor / major
+  npm run check           # 手动自检（CI 亦会校验）
+  ```
+- **发布**：push 到 `main` 后，`.github/workflows/release.yml` 发现 `v<version>` 不存在时自动打
+  tag + 创建 release；PR 由 `version-check.yml` 兜底校验版本是否提升。
+- **本地验证**：`npm pack --dry-run` 查看打包内容；在 `/tmp` 里 `node bin/create.mjs <dir> --init`
+  验证 scaffold 与 `opencode/ → .opencode/` 映射。
+
 ## 目录结构
 
 ```text
-opencode-workspace-starter/
+opencode-workspace-starter/            # 源码仓库（不是用户的 workspace-root）
 ├─ README.md
-├─ package.json                      # 含 bin（create-opencode-workspace），支持 npx github:user/repo
+├─ package.json                      # bin + files + 版本脚本；version = 框架版本
 ├─ template.code-workspace
+├─ template.gitignore                # scaffold 时写成用户的 .gitignore
 ├─ opencode.jsonc
 ├─ AGENTS.md
-├─ bin/
-│  └─ create.mjs                     # scaffolding 入口（npx / node 两用）
-├─ .opencode/
+├─ opencode/                         # 用户模板（无点）；scaffold → 目标项目 .opencode/
 │  ├─ agents/
 │  │  ├─ orchestrator.md            # Orchestrator 主 agent（mode: primary）
 │  │  └─ reviewer.md                # 跨仓审查员（{repo}-writer.md 由 init 按仓生成）
-│  ├─ commands/
-│  │  ├─ prepare.md                  # /prepare 命令（含 frontmatter description）
-│  │  └─ opsx-*.md                   # 官方命令（openspec init 生成）
-│  └─ skills/                        # 官方 skills（openspec init 生成）
+│  └─ commands/
+│     └─ prepare.md                  # /prepare 命令（含 frontmatter description）
+├─ bin/
+│  └─ create.mjs                     # scaffolding 入口（npx / node 两用）
 ├─ scripts/
-│  ├─ init.mjs                       # 初始化：派生 agents + opencode.jsonc，末尾自动 sync:config
+│  ├─ init.mjs                       # 派生 agents + opencode.jsonc，末尾自动 sync:config
 │  ├─ sync-config.mjs                # 同步 openspec/config.yaml（npm run sync:config）
-│  └─ sync-config-lib.mjs            # 同步核心逻辑（供 init.mjs import）
+│  ├─ sync-config-lib.mjs            # 同步核心逻辑（供 init.mjs import）
+│  ├─ template-map.mjs               # 源码模板 → 用户项目 的映射/清单（create、upgrade 共用）
+│  ├─ check-version.mjs              # 提交前版本门禁（npm run check）
+│  └─ upgrade.mjs                    # 升级命令（npm run upgrade / check:update）
+├─ .githooks/
+│  └─ pre-push                       # 版本门禁钩子（npm run hooks:install 启用）
+├─ .github/workflows/
+│  ├─ release.yml                    # 版本变化时自动 tag + release
+│  └─ version-check.yml              # PR 版本校验
 ├─ openspec/
 │  ├─ FRAMEWORK.md                   # 框架编排层规范（artifact 格式以官方 schema 为准）
 │  ├─ config.yaml                    # OpenSpec 生效配置（由模板同步，勿手改三段）
@@ -222,5 +273,5 @@ opencode-workspace-starter/
 │     ├─ context.md
 │     ├─ tasks.md
 │     └─ review-report.md
-└─ .gitignore
+└─ .gitignore                        # 源码专用（忽略 .opencode/ 等本地目录）
 ```

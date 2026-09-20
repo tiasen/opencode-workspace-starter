@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Create tag and release if version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          V="v$(node -p "require('./package.json').version")"
+          if git ls-remote --tags origin "refs/tags/$V" | grep -q "refs/tags/$V$"; then
+            echo "Tag $V already exists, skipping."
+            exit 0
+          fi
+          git tag "$V"
+          git push origin "$V"
+          gh release create "$V" --title "$V" --generate-notes

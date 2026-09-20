@@ -1,27 +1,35 @@
 {
   "name": "opencode-workspace-starter",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "基于 OpenCode Sub-Agent 体系 + OpenSpec SDD（Spec-Driven Development）的多仓库协作开发框架脚手架",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tiasen/opencode-workspace-starter.git"
+  },
   "bin": {
     "create-opencode-workspace": "./bin/create.mjs"
   },
   "files": [
-    ".opencode/",
+    "opencode/",
     "bin/",
     "scripts/",
     "openspec/",
     "template.code-workspace",
+    "template.gitignore",
     "opencode.jsonc",
     "AGENTS.md",
-    "README.md",
-    ".gitignore"
+    "README.md"
   ],
   "scripts": {
     "init": "node scripts/init.mjs",
     "context": "opencode run --command prepare",
-    "sync:config": "node scripts/sync-config.mjs"
+    "sync:config": "node scripts/sync-config.mjs",
+    "check": "node scripts/check-version.mjs",
+    "check:update": "node scripts/upgrade.mjs --check",
+    "upgrade": "node scripts/upgrade.mjs",
+    "hooks:install": "git config core.hooksPath .githooks"
   },
   "engines": {
     "node": ">=18.0.0"

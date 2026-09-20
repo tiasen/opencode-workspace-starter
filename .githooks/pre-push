@@ -1,0 +1,5 @@
+#!/bin/sh
+# 提交前版本门禁：相对 origin/main 有实质性改动但 package.json.version 未提升时拒绝 push。
+# 安装：npm run hooks:install（即 git config core.hooksPath .githooks）
+# 绕过：git push --no-verify（不建议），CI 侧的 version-check 仍会拦截。
+node scripts/check-version.mjs --base origin/main

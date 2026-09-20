@@ -1,0 +1,32 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+out/
+
+# OpenCode 本地运行时产物（注意：.opencode/agents、.opencode/commands、.opencode/skills
+# 是本框架的配置，必须提交，不要忽略）
+.opencode-cache/
+.opencode/*.log
+.opencode/node_modules/
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+
+# OpenSpec 本地草稿（保留 templates/，其余 change 可按需忽略）
+# 默认全部提交；如需忽略本地实验性 change，取消注释下一行并按名添加：
+# openspec/changes/local-*/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/*
+!.vscode/*.code-workspace
+.idea/
+
+# 日志与临时文件
+*.log
+*.tmp
+.temp/
