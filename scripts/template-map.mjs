@@ -64,6 +64,7 @@ export const USER_OWNED = [
 /** 框架维护的 npm scripts（create 生成、upgrade 合并；不覆盖用户其他 scripts 键）。 */
 export const FRAMEWORK_SCRIPTS = {
   init: "node scripts/init.mjs",
+  postinit: "node scripts/sync-config.mjs", // npm run init 之后自动同步配置，防止遗忘
   context: "opencode run --command prepare",
   "sync:config": "node scripts/sync-config.mjs",
   check: "node scripts/check-version.mjs",

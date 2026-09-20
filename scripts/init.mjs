@@ -626,12 +626,16 @@ async function main() {
   }
 
   log("==> 6/6 同步 OpenSpec 项目配置");
-  // postinit：把 openspec/config.template.yaml 同步到 openspec/config.yaml。
-  // 全程非致命——失败只 warn 并给出手工命令，不中断 init。
+  // 同步策略（双入口覆盖，用户无需记得单独跑 sync:config）：
+  //   - `npm run init` 时，由 package.json 的 postinit 钩子自动执行 sync:config；
+  //   - 直接 `node scripts/init.mjs`（含 create.mjs --init）时，在此处兜底执行。
+  const viaNpmInit = process.env.npm_lifecycle_event === "init";
   if (args.skipOpenspec) {
     log("  已跳过（--skip-openspec）。需要时手动运行 npm run sync:config。");
   } else if (args.dryRun) {
-    log("  [dry-run] 将执行: npm run sync:config（同步 openspec/config.yaml）");
+    log("  [dry-run] 将执行 sync:config（注：npm run init 时 postinit 钩子仍会真实执行；纯预览请用 node scripts/init.mjs --dry-run）");
+  } else if (viaNpmInit) {
+    log("  由 postinit 钩子处理：npm run init 会自动执行 sync:config。");
   } else {
     try {
       const result = syncConfig({ root: workspaceRoot });

@@ -90,11 +90,14 @@ openspec init --tools opencode --force
 ### 3. 生成 Agent 与项目配置
 
 ```bash
-npm run init -- --yes   # 派生 .opencode/agents/*.md、opencode.jsonc，并同步 openspec/config.yaml
-npm run sync:config     # 幂等；只把 config.template.yaml 的 schema/rules/operations 三段同步过去
+npm run init -- --yes   # 派生 .opencode/agents/*.md、opencode.jsonc
+# postinit 钩子随后自动执行 sync-config：把 config.template.yaml 的 schema/rules/operations 三段同步进 config.yaml
+npm run sync:config     # 一般无需手动执行；仅在你单独改过 config.template.yaml 后才需要
 ```
 
-> 若第 1 步用了 `--init`，`npm run init` 已自动跑过一次；此处重跑幂等，无副作用。
+> **不会忘**：`npm run init` 之后 npm 会自动跑 `postinit`（= `sync:config`），所以配置同步是自动的。
+> 直接 `node scripts/init.mjs`（含 `create --init`）时，`init.mjs` 内部同样会兜底同步。两条入口都覆盖。
+> 若第 1 步用了 `--init`，第 3 步可跳过（重跑也幂等）。
 
 ### 4. 开始一个 Change（在 opencode TUI 内输入斜杠命令）
 

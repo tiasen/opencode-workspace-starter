@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "init": "node scripts/init.mjs",
+    "postinit": "node scripts/sync-config.mjs",
     "context": "opencode run --command prepare",
     "sync:config": "node scripts/sync-config.mjs",
     "check": "node scripts/check-version.mjs",
