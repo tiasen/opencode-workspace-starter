@@ -1,6 +1,6 @@
 {
   "name": "opencode-workspace-starter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "基于 OpenCode Sub-Agent 体系 + OpenSpec SDD（Spec-Driven Development）的多仓库协作开发框架脚手架",
