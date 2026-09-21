@@ -1,6 +1,6 @@
 {
   "name": "opencode-workspace-starter",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "基于 OpenCode Sub-Agent 体系 + OpenSpec SDD（Spec-Driven Development）的多仓库协作开发框架脚手架",
@@ -25,6 +25,7 @@
   "scripts": {
     "init": "node scripts/init.mjs",
     "postinit": "node scripts/sync-config.mjs",
+    "worktree": "node scripts/worktree.mjs",
     "context": "opencode run --command prepare",
     "sync:config": "node scripts/sync-config.mjs",
     "check": "node scripts/check-version.mjs",

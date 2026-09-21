@@ -17,6 +17,10 @@ out/
 # 默认全部提交；如需忽略本地实验性 change，取消注释下一行并按名添加：
 # openspec/changes/local-*/
 
+# 并行检出（worktree）——默认位于 workspace-root 的父目录下（../worktrees/），
+# 不在本仓库内，通常无需忽略。仅当用 --worktrees-dir 指到本仓库内部时取消下一行：
+# worktrees/
+
 # 系统文件
 .DS_Store
 Thumbs.db

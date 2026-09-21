@@ -19,6 +19,7 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 │   └── skills/                      # 官方 OpenSpec skills（openspec init 生成）
 ├── bin/create.mjs           # scaffolding 入口：npx github:user/repo 即用
 ├── scripts/init.mjs         # init 脚本：从 .code-workspace 派生全部 Agent 配置
+├── scripts/worktree.mjs     # 并行检出管理（整套检出，见「并行开发」）
 └── openspec/
     ├── FRAMEWORK.md               # 框架编排层规范
     ├── config.yaml                # OpenSpec 生效配置（npm run sync:config 同步）
@@ -168,6 +169,56 @@ Orchestrator（Primary）
 
 维护节奏：每次新建 Change 前运行一次；大仓重构后重新运行。
 
+## 并行开发：worktree（整套检出）
+
+同时推进多个 Change 时，每个 Change 需要一套互不干扰的检出（否则两个 Writer 会抢同一个工作区与 `node_modules`）。
+
+**并行的单位是整套检出，不是单个仓。** 一个 worktree = workspace-root + `.code-workspace` 里的全部子应用，全部落在同一条分支上，不可分割——不存在"只给 frontend 开 worktree"这种操作。
+
+```text
+P/                                          ← 主树父目录
+├── my-project/                             workspace-root 主检出 (main)
+├── frontend/  backend/                     (main)
+└── worktrees/feat-a/                       ← 检出根目录（可用 --worktrees-dir 改）
+    ├── .worktree.jsonc                     清单（本地状态，不在任何 git 仓内）
+    └── my-project/  frontend/  backend/    全部 @ feat-a
+```
+
+镜像规则：实例内的 workspace 目录保持主树的 basename，成员落在与主树**完全相同的相对层级**上。因此那份已提交的 `.code-workspace` 在实例里**无需任何修改**即可解析到本实例的成员（`../frontend` 指向本 worktree 的 frontend）。
+
+### 命令
+
+```bash
+npm run worktree -- new feat-a          # 创建整套检出（自动补基线 commit + 种入定义 + 装依赖）
+npm run worktree -- open feat-a         # 输出启动命令（--exec 直接启动 opencode）
+npm run worktree -- install feat-a      # 补装/重装各成员依赖
+npm run worktree -- list                # 列出所有检出
+npm run worktree -- which               # 当前在 worktree 还是主树
+npm run worktree -- doctor feat-a       # 校验完整性（成员 / 分支 / 依赖）
+npm run worktree -- remove feat-a --force
+npm run worktree -- prune               # 清理各仓失效的 worktree 元数据
+```
+
+`new` 完成后会打印可直接复制的启动命令：
+
+```text
+opencode /…/P/worktrees/feat-a/my-project
+```
+
+### 关键性质
+
+- **不需要用户先 commit**：`new` 从基线 ref 分叉，主树脏、停在任意分支都不影响；它只把 **workspace 定义**（`.code-workspace` / `.opencode/**` / `AGENTS.md` 等）种入实例，并明确排除 `openspec/changes/**`（那是当次变更的工作区，必须隔离）。用户正在改的业务文件一个都不碰。
+- **bootstrap 自动**：workspace-root 首次使用时自动 `git init` + 创建基线 commit（仅本地），用户无需理解"基线"。
+- **原子性**：结构失败（仓不存在 / 分支被占 / 路径冲突）→ 全部回滚；依赖安装失败非致命，可 `install` 重试。
+- **依赖独立**：每个 worktree 各自安装 `node_modules`，不共享（分支间依赖漂移时不会互相污染）。
+- **识别当前检出**：`npm run worktree -- which`，或从 cwd 向上查找 `.worktree.jsonc`。**主树与 worktree 的 workspace 目录同名**，所以判断依据是分支名或完整路径，不要只看目录名。
+
+### 与流程的衔接
+
+- `/prepare` 会在回报顶部声明**当前检出**，并在 worktree 内校验完整性；不完整时**禁止派发**（见 `AGENTS.md` 第 6 节）。
+- `context.md` 需记录本次 Change 的 worktree id 与分支。
+- **合并仍按仓独立进行**：git 没有多仓事务，"不可分割"只适用于创建与隔离；落地是一组协调的 PR，靠统一 worktree id + 同名分支串联，跨仓契约一致性由 Reviewer 兜底。
+
 ## 权限速查
 
 | Agent | `mode` | 可写 | 只读 | 可唤起 |
@@ -257,6 +308,8 @@ opencode-workspace-starter/            # 源码仓库（不是用户的 workspac
 │  └─ create.mjs                     # scaffolding 入口（npx / node 两用）
 ├─ scripts/
 │  ├─ init.mjs                       # 派生 agents + opencode.jsonc，末尾自动 sync:config
+│  ├─ worktree.mjs                   # 并行检出管理（new/open/install/list/which/doctor/remove/prune）
+│  ├─ workspace-lib.mjs              # .code-workspace 解析与路径规范化（init / worktree 共用）
 │  ├─ sync-config.mjs                # 同步 openspec/config.yaml（npm run sync:config）
 │  ├─ sync-config-lib.mjs            # 同步核心逻辑（供 init.mjs import）
 │  ├─ template-map.mjs               # 源码模板 → 用户项目 的映射/清单（create、upgrade 共用）

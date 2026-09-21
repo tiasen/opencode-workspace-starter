@@ -65,6 +65,7 @@ export const USER_OWNED = [
 export const FRAMEWORK_SCRIPTS = {
   init: "node scripts/init.mjs",
   postinit: "node scripts/sync-config.mjs", // npm run init 之后自动同步配置，防止遗忘
+  worktree: "node scripts/worktree.mjs",
   context: "opencode run --command prepare",
   "sync:config": "node scripts/sync-config.mjs",
   check: "node scripts/check-version.mjs",

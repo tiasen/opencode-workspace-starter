@@ -1,5 +1,6 @@
 # Tasks: {change-name}
 
+> **检出（worktree）**: `{worktree-id}` / 主树（`node scripts/worktree.mjs which`）——所有 Task 都派发到该检出内，路径用检出内相对路径。
 > 派发属于 **Apply 阶段**：只有用户显式 `/opsx-apply` 之后才派发；`tasks.md` 就绪本身不触发派发。
 > 派发时使用 OpenCode Task 工具按 Assignee 唤起子 Agent，Prompt 模板见根目录 `AGENTS.md` 第 4.3 节。
 > 无依赖的 Task 并发派发，有依赖的按顺序派发。

@@ -31,6 +31,12 @@ import { execSync, spawnSync } from "node:child_process";
 import readline from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { syncConfig } from "./sync-config-lib.mjs";
+import {
+  findWorkspaceFile,
+  loadWorkspace,
+  buildFolderModels,
+  isAbsoluteFolderPath,
+} from "./workspace-lib.mjs";
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -56,73 +62,9 @@ function fail(msg) {
   process.exitCode = 1;
 }
 
-/** 将任意路径转为 POSIX 风格（正斜杠），保证通配符在各平台一致。 */
-function toPosix(p) {
-  return p.split(path.sep).join("/");
-}
-
-/** 去掉 JSONC 注释（// 与 block 注释），保留字符串内的 // 不被误伤。 */
-function stripJsonComments(text) {
-  let out = "";
-  let i = 0;
-  let inStr = false;
-  let strCh = "";
-  let inLine = false;
-  let inBlock = false;
-  while (i < text.length) {
-    const c = text[i];
-    const n = text[i + 1] ?? "";
-    if (inLine) {
-      if (c === "\n") {
-        inLine = false;
-        out += c;
-      }
-      i += 1;
-      continue;
-    }
-    if (inBlock) {
-      if (c === "*" && n === "/") {
-        inBlock = false;
-        i += 2;
-      } else {
-        if (c === "\n") out += c;
-        i += 1;
-      }
-      continue;
-    }
-    if (inStr) {
-      out += c;
-      if (c === "\\") {
-        out += n;
-        i += 2;
-        continue;
-      }
-      if (c === strCh) inStr = false;
-      i += 1;
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      inStr = true;
-      strCh = c;
-      out += c;
-      i += 1;
-      continue;
-    }
-    if (c === "/" && n === "/") {
-      inLine = true;
-      i += 2;
-      continue;
-    }
-    if (c === "/" && n === "*") {
-      inBlock = true;
-      i += 2;
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
+// toPosix / stripJsonComments / findWorkspaceFile / loadWorkspace /
+// normalizeFolderPath / sanitizeAgentName / buildFolderModels 已抽取到
+// scripts/workspace-lib.mjs，由 init.mjs 与 worktree.mjs 共用，避免解析规则漂移。
 
 function parseArgs(argv) {
   const args = { workspace: null, root: null, yes: false, dryRun: false, skipOpenspec: false };
@@ -159,6 +101,58 @@ function printHelp() {
   log(`  --yes        覆盖已存在的 Agent 文件时不提示`);
   log(`  --dry-run    仅预览，不写文件`);
   log(`  --skip-openspec  跳过最后的 OpenSpec 配置同步（离线/CI 用）`);
+}
+
+/**
+ * 确保 workspace-root 是一个独立 git 仓库 —— 这是 worktree（并行检出）能力的硬前置。
+ *
+ * 幂等：已在独立仓库内则跳过；位于更大的仓库内部时告警（worktree 需要 workspace-root
+ * 作为独立仓库，否则会连带检出外层仓库）。
+ *
+ * 这里只 `git init`，**不创建 commit**：worktree 的起点必须是一个 commit，但首个基线
+ * commit 由 `worktree.mjs new` 在"workspace 定义已定稿"时自动补齐，避免把尚是占位路径的
+ * .code-workspace 固化进历史。
+ */
+function ensureGitRepo(dir, opts) {
+  let top = null;
+  try {
+    top = execSync("git rev-parse --show-toplevel", {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    top = null;
+  }
+
+  if (top === null) {
+    if (opts.dryRun) {
+      log("  [dry-run] 将执行: git init -b main（worktree 能力的前置）");
+      return;
+    }
+    try {
+      execSync("git init -b main", { cwd: dir, stdio: "ignore" });
+      log("  ✓ 已初始化 git 仓库（main）；首个基线 commit 将在 worktree.mjs new 时自动创建。");
+    } catch (err) {
+      warn(`git init 失败: ${String(err.message).split("\n")[0]}`);
+    }
+    return;
+  }
+
+  let same = false;
+  try {
+    same = fs.realpathSync(top) === fs.realpathSync(dir);
+  } catch {
+    same = path.resolve(top) === path.resolve(dir);
+  }
+  if (same) {
+    log(`  ✓ git 仓库已就绪（${top}）`);
+  } else {
+    warn(
+      `workspace-root 位于另一个 git 仓库内部（${top}）：worktree 需要 workspace-root 作为独立仓库，` +
+        `否则会连带检出外层仓库。建议把 workspace-root 独立成仓。`
+    );
+  }
 }
 
 function askConfirm(question) {
@@ -219,153 +213,9 @@ function checkEnvironment() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. 解析 .code-workspace
+// 2/3. 解析 .code-workspace 与路径规范化
+// 实现见 scripts/workspace-lib.mjs（init / worktree 共用，规则唯一）
 // ---------------------------------------------------------------------------
-
-function findWorkspaceFile(explicit) {
-  if (explicit) {
-    const p = path.resolve(process.cwd(), explicit);
-    if (!fs.existsSync(p)) {
-      fail(`指定的 workspace 文件不存在: ${p}`);
-      process.exit(1);
-    }
-    return p;
-  }
-  // 扫描 starter 根目录下的 *.code-workspace。
-  // 用户自建的 workspace 文件优先于 template（scaffolding 后目录里通常两者并存，
-  // 用户编辑的是自建的那份，不应被 template 抢占）。
-  // 多个自建文件并存时，优先与目录同名的那个（create.mjs 按此约定生成），其次按字母序。
-  const named = [];
-  try {
-    for (const f of fs.readdirSync(STARTER_ROOT)) {
-      if (f.endsWith(".code-workspace") && f !== "template.code-workspace") {
-        named.push(path.join(STARTER_ROOT, f));
-      }
-    }
-  } catch {
-    // 忽略读取错误，后续报错
-  }
-  const preferredName = `${path.basename(STARTER_ROOT)}.code-workspace`;
-  named.sort((a, b) => {
-    const ap = path.basename(a) === preferredName ? 0 : 1;
-    const bp = path.basename(b) === preferredName ? 0 : 1;
-    if (ap !== bp) return ap - bp;
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
-  const candidates = [...named];
-  const template = path.join(STARTER_ROOT, "template.code-workspace");
-  if (fs.existsSync(template) && !candidates.includes(template)) {
-    candidates.push(template);
-  }
-  if (candidates.length === 0) {
-    fail("未找到 .code-workspace 文件。请使用 --workspace 指定，或从 template.code-workspace 复制一份。");
-    process.exit(1);
-  }
-  if (candidates.length > 1) {
-    log(`  发现多个 workspace 文件，使用第一个: ${candidates[0]}`);
-    log(`  候选列表: ${candidates.join(", ")}`);
-  }
-  return candidates[0];
-}
-
-function loadWorkspace(workspaceFile) {
-  log("==> 2/6 解析 workspace");
-  log(`  workspace 文件: ${workspaceFile}`);
-  const raw = fs.readFileSync(workspaceFile, "utf8");
-  let data;
-  try {
-    data = JSON.parse(stripJsonComments(raw));
-  } catch (err) {
-    fail(`workspace 文件 JSON 解析失败: ${err.message}`);
-    process.exit(1);
-  }
-  if (!Array.isArray(data.folders) || data.folders.length === 0) {
-    fail("workspace 文件缺少非空 folders 数组。");
-    process.exit(1);
-  }
-  return data;
-}
-
-// ---------------------------------------------------------------------------
-// 3. 路径规范化（关键逻辑）
-// ---------------------------------------------------------------------------
-
-/**
- * 将 workspace folder.path 规范化为「相对 workspace-root 的 POSIX 路径」。
- *
- * 步骤:
- *   a. 以 .code-workspace 文件所在目录为基准 resolve 原始 path
- *      （VS Code 语义：相对路径相对 workspace 文件位置）。
- *   b. 以 workspace-root（默认为 starter 根，即 opencode.jsonc 所在目录）为基准
- *      计算 relative 路径。
- *   c. 转为 POSIX 风格，`.` 保持为 `.`。
- *   d. 对 workspace-root 自身返回 `.`，其余返回如 `../frontend` 的相对形式。
- *
- * 这样生成的 `{rel}/**` 通配符与 Orchestrator 运行时的 cwd 一致，
- * 不会因 `..` 解析错位导致越权或误拦截。
- */
-function normalizeFolderPath(folderPath, workspaceFileDir, workspaceRoot) {
-  const trimmed = String(folderPath).trim();
-  if (trimmed === "" || trimmed === ".") {
-    // 相对 workspace 文件的 "." —— 需要先 resolve 再 relative，避免基准不同
-    const abs = path.resolve(workspaceFileDir, trimmed);
-    const rel = path.relative(workspaceRoot, abs);
-    if (rel === "") return ".";
-    return toPosix(rel) || ".";
-  }
-  const abs = path.resolve(workspaceFileDir, trimmed);
-  const rel = path.relative(workspaceRoot, abs);
-  if (rel === "") return ".";
-  const posix = toPosix(rel);
-  return posix;
-}
-
-function sanitizeAgentName(name) {
-  return String(name)
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-_]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "repo";
-}
-
-function buildFolderModels(folders, workspaceFileDir, workspaceRoot) {
-  const models = [];
-  const seenNames = new Set();
-  for (const f of folders) {
-    // VS Code 规范里 folder 只有 path 必填，name 可选。
-    // name 缺失时模仿 VS Code：取解析后绝对路径的 basename 作为显示名。
-    if (!f || typeof f.path !== "string" || String(f.path).trim() === "") {
-      warn(`跳过非法 folder 条目（缺少 path）: ${JSON.stringify(f)}`);
-      continue;
-    }
-    const abs = path.resolve(workspaceFileDir, String(f.path).trim());
-    const hasName = typeof f.name === "string" && f.name.trim() !== "";
-    const rawName = hasName ? f.name : path.basename(abs);
-    const name = sanitizeAgentName(rawName);
-    if (!hasName) {
-      log(`  folder 未指定 name，按 VS Code 规则取路径 basename: "${rawName}"（规范化为 "${name}"）`);
-    }
-    if (seenNames.has(name)) {
-      warn(`folder name 重复 "${rawName}"（规范化为 "${name}"），已跳过重复项。`);
-      continue;
-    }
-    seenNames.add(name);
-    const rel = normalizeFolderPath(f.path, workspaceFileDir, workspaceRoot);
-    const exists = fs.existsSync(abs);
-    models.push({
-      originalName: rawName,
-      name,
-      rawPath: f.path,
-      relPath: rel,
-      absPath: abs,
-      exists,
-      isRoot: rel === "." || rel === "",
-    });
-  }
-  return models;
-}
 
 // ---------------------------------------------------------------------------
 // 4/5. 生成 Agent 配置与 opencode.jsonc
@@ -557,12 +407,24 @@ async function main() {
 
   checkEnvironment();
 
-  const workspaceFile = findWorkspaceFile(args.workspace);
-  const workspaceFileDir = path.dirname(workspaceFile);
-  const ws = loadWorkspace(workspaceFile);
+  const workspaceFile = findWorkspaceFile({ root: STARTER_ROOT, explicit: args.workspace });
+  if (!workspaceFile) {
+    fail("未找到 .code-workspace 文件。请使用 --workspace 指定，或从 template.code-workspace 复制一份。");
+    process.exit(1);
+  }
+  log("==> 2/6 解析 workspace");
+  log(`  workspace 文件: ${workspaceFile}`);
+  let ws;
+  try {
+    ws = loadWorkspace(workspaceFile);
+  } catch (err) {
+    fail(err.message);
+    process.exit(1);
+  }
+  const workspaceFileDir = ws.dir;
 
   log("==> 3/6 路径规范化");
-  const folders = buildFolderModels(ws.folders, workspaceFileDir, workspaceRoot);
+  const folders = buildFolderModels(ws.folders, workspaceFileDir, workspaceRoot, { log, warn });
   if (folders.length === 0) {
     fail("没有可用的 folder 条目，终止。");
     process.exit(1);
@@ -572,6 +434,11 @@ async function main() {
     log(`  folder "${f.originalName}": raw="${f.rawPath}" rel="${f.relPath}" abs="${f.absPath}" [${flag}]${f.isRoot ? " [workspace-root]" : ""}`);
     if (!f.exists) {
       warn(`路径不存在: ${f.absPath}，请确认仓库已 clone 到该位置。`);
+    }
+    if (f.isAbsolute) {
+      warn(
+        `folder "${f.originalName}" 使用了绝对路径，worktree 的镜像布局要求相对路径（否则无法为每个 worktree 正确解析成员）。`
+      );
     }
   }
 
@@ -648,12 +515,16 @@ async function main() {
     }
   }
 
+  log("==> git 仓库检查（worktree 前置）");
+  ensureGitRepo(workspaceRoot, args);
+
   log("");
   log("完成。下一步:");
   log("  1. 检查 .opencode/agents/ 下生成的 *-writer.md 作用域是否正确");
   log("  2. 在 workspace-root 运行 /prepare 确认各仓就位");
   log("  3. 装好官方 CLI 后运行 openspec init --tools opencode --force（生成 /opsx-* 命令）");
   log("  4. 新建 Spec Change：用 /opsx-propose 起草，扩展文件见 openspec/templates/");
+  log("  5. 需要并行开发时：node scripts/worktree.mjs new <id>（自动补齐基线 commit 并创建整套检出）");
 }
 
 main().catch((err) => {

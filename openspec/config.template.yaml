@@ -14,6 +14,11 @@ context: |
   Tech stack and per-repo conventions live in each repo's own AGENTS.md — read it live.
   Execution is dispatched by the Orchestrator to per-repo Writer agents via the Task tool.
 
+  Parallel development uses whole-checkout worktrees (see AGENTS.md section 6): one worktree =
+  workspace-root plus every sub-app, all on the same branch, indivisible. Identify the current
+  checkout with `node scripts/worktree.mjs which` and record it in context.md. When running inside
+  a worktree, all dispatch stays inside that worktree and paths are worktree-relative.
+
   Workflow discipline (strict, must follow): phases are user-driven through the official
   /opsx-* commands. Explore only discusses and writes no artifacts. Propose drafts the
   artifacts and then STOPS for user review — never start implementation or dispatch in the

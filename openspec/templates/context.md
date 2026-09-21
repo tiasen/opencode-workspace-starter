@@ -1,7 +1,10 @@
 # Context: {change-name}
 
 - **Change**: `{change-name}`
+- **检出（worktree）**: `{worktree-id}` / 主树（以 `node scripts/worktree.mjs which` 为准）；本次 Change 的**全部派发都落在该检出内**，路径一律用检出内相对路径
 - **上下文来源**: live 读取（`.code-workspace` + 各仓 `AGENTS.md` + 当次设计），无快照文件
+
+> 在 worktree 内运行时，下表的"路径"是**检出内相对路径**（如 `../frontend` 指向本 worktree 的成员，而非主树）。`/prepare` 的完整性检查是派发门禁：worktree 不完整时不得派发。
 
 ## 全局背景
 

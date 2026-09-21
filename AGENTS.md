@@ -123,7 +123,7 @@ Prompt 中的 `{commands}` 必须是**只覆盖本次改动面**的命令，而�
 #### 规则一：派发必须 grounded in live 上下文（`/prepare` + 实时读取）
 
 - 派发任何 Task 之前，必须已运行 `/prepare` 确认各仓就位。发现缺仓或缺 `AGENTS.md` 时，先补齐检出或缩小 Change 范围，不得带着未知数派发。
-- 构造 Prompt 时必须写入本仓上下文：路径（取自 `.code-workspace`）、验证命令与关键约束（live 读取该仓 `AGENTS.md`）、当次 Change 的三件套文档。以实时代码为准，不依赖任何快照文件；禁止凭记忆或过期假设填写。
+- 构造 Prompt 时必须写入本仓上下文：路径（取自 `.code-workspace`；在 worktree 内运行时即检出内相对路径，见第 6 节）、验证命令与关键约束（live 读取该仓 `AGENTS.md`）、当次 Change 的三件套文档。以实时代码为准，不依赖任何快照文件；禁止凭记忆或过期假设填写。
 - 执行依据永远是 live 代码：Writer 动工时读到的就是最新状态，无需也不维护 commit 快照；真正的跨仓不一致由 Reviewer 的一致性审查兜底。
 
 #### 规则二：严禁跨仓任务（单仓原子性）
@@ -181,7 +181,34 @@ Prompt 中的 `{commands}` 必须是**只覆盖本次改动面**的命令，而�
 - Orchestrator 汇总各仓变更与验证结果后停下，等待用户显式 `/opsx-archive`。
 - 跳过理由必须已写入 `context.md`，保证可追溯。
 
-## 6. 禁止事项
+## 6. 并行开发：worktree（整套检出）
+
+> 机制与命令见 `README.md`「并行开发」一节；`scripts/worktree.mjs` 是唯一实现。
+
+**并行单位是整套检出，不是单个仓。** 一个 worktree = workspace-root + `.code-workspace` 里的全部子应用，全部落在同一条分支上，不可分割：
+
+```text
+P/                                          ← 主树父目录
+├── my-project/                             workspace-root 主检出 (main)
+├── frontend/  backend/                     (main)
+└── worktrees/feat-a/
+    ├── .worktree.jsonc                     清单（本地状态，不在任何 git 仓内）
+    └── my-project/  frontend/  backend/    全部 @ feat-a
+```
+
+镜像规则：实例内的 workspace 目录保持主树的 basename，每个成员落在与主树**完全相同的相对层级**上。因此已提交的 `.code-workspace` 在实例里无需任何修改即可解析到本实例的成员。
+
+规则：
+
+- **识别当前检出**：从 cwd 向上查找 `.worktree.jsonc`——找到即在 worktree 内，否则在主树。`node scripts/worktree.mjs which` 给出结论。**每次会话开场、以及 `/prepare` 回报中，必须显式声明当前检出**（主树 or worktree id + 分支）。
+- **派发路径一律用检出内相对路径**：Orchestrator 在 worktree 内运行时，`../frontend` 天然解析到本 worktree 的成员。Prompt 中的 `{rel-path}` 取 `.code-workspace` 的相对值，**不要写主树绝对路径**，否则会把 Task 派到别的检出。
+- **`context.md` 必须记录本次 Change 的 worktree id 与分支**，便于追溯与合并。
+- **`/prepare` 的完整性检查是派发门禁**：worktree 不完整（成员缺失 / 目录被移动 / 分支不一致）时禁止派发。
+- **合并仍按仓独立进行**：git 没有多仓事务，"不可分割"只适用于**创建与隔离**；落地是一组协调的 PR，靠统一 worktree id + 同名分支串联，跨仓契约一致性由 Reviewer 兜底。
+- **主树状态无关**：主树脏、停在任意分支都不影响 `worktree new`——它从基线 ref 分叉，并只把 workspace 定义（不含 `openspec/changes/**`）种入实例；用户无需为开一条并行线而 commit。
+- **不要手改 worktree 内的路径**：仓库增删改请更新 `.code-workspace` 后重跑 `npm run init`。
+
+## 7. 禁止事项
 
 - **禁止在用户给出显式 `/opsx-*` 指令前推进阶段**：需求描述完就自动 propose / apply / archive 是严重违规。
 - **禁止在 Propose 后未经用户 review 就派发 Writer**：`tasks.md` 就绪 ≠ 可以派发，只有 Apply 阶段才派发。
@@ -191,3 +218,5 @@ Prompt 中的 `{commands}` 必须是**只覆盖本次改动面**的命令，而�
 - 禁止分发跨仓 Task（见 4.5 规则二）；禁止在 Prompt 中省略本仓上下文（路径、验证命令）。
 - 禁止跳过第 5 节判定：既禁止对判定"需要审查"的改动跳过审查，也禁止对判定"可跳过"的改动无理由唤起 reviewer（除非用户要求）。
 - 禁止在 Review `FAILED` 时强行宣布完成。
+- **禁止跨检出混搭**：一次 Change 的所有派发必须落在同一个检出内（同一个 worktree，或同为主树）；不得把 Task 派给另一个 worktree 或主树，否则"整套检出"的隔离被打破。
+- 禁止在 worktree 不完整时派发（见第 6 节；`/prepare` 的完整性检查是门禁）。

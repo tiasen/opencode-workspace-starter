@@ -70,6 +70,7 @@ permission:
 
 - **派发必须 grounded in live 上下文**：派发前必须已运行 `/prepare` 确认各仓就位；Prompt 中的本仓上下文 live 取值，禁止凭记忆或过期假设填写。不维护任何 commit 快照，跨仓不一致由 Reviewer 兜底。
 - **严禁跨仓任务**：一个 Task 只派给一个 `{repo}-writer`，修改范围必须全部落在其本仓内；涉及 ≥2 个仓的工作先拆成按仓 delta spec 再拆成多个单仓 Task，依赖用 Task 顺序表达。派发前逐 Task 做 scope 自检，不通过打回重拆。
+- **严禁跨检出混搭**：一次 Change 的全部派发必须落在同一个检出内（同一个 worktree 或同为主树）。开场与 `/prepare` 回报中先声明当前检出（`node scripts/worktree.mjs which`）；Prompt 中的路径用**检出内相对路径**（如 `../frontend`），不要写主树绝对路径。worktree 不完整时禁止派发。
 - Remediation Task 同样单仓：一个失败项只派给其 `Target` 对应的 Writer。
 
 ## 详细 playbook
