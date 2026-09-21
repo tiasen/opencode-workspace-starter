@@ -448,6 +448,8 @@ function writerMarkdown(folder) {
   return `${front}\n${body}`;
 }
 
+// 注意：本函数生成的 reviewer.md 必须与仓库模板 opencode/agents/reviewer.md 保持一致
+// （upgrade 分发模板、init 重写同一文件，只改一侧会导致规则被静默回滚）。
 function reviewerMarkdown() {
   const front = agentFrontmatter(`负责跨仓一致性审查的 Reviewer Agent`, {
     // 兜底 deny 在前、唯一 allow 在后（最后匹配获胜）
@@ -466,8 +468,8 @@ function reviewerMarkdown() {
     ``,
     `## 工作协议`,
     ``,
-    `1. Orchestrator 会在 Prompt 中给出 Change 名。阅读该 Change 的 \`design.md\`（审查基准，精确到字段级）、\`specs/{repo}/spec.md\`（各仓 delta spec）与各仓实际改动。`,
-    `2. 逐项核对检查清单：接口定义一致性（前端调用的 API 与后端实现契约是否匹配）、数据模型与类型定义一致性、架构约束遵循情况。`,
+    `1. Orchestrator 会在 Prompt 中给出 Change 名。以 \`specs/{repo}/spec.md\`（各仓 delta spec）为**审查基准（唯一规范来源）**，\`design.md\` 仅作非规范性背景参考；结合各仓实际改动核对。`,
+    `2. 逐项核对检查清单：接口定义一致性（前端调用的 API 与后端实现契约是否匹配）、数据模型与类型定义一致性、架构约束遵循情况。默认**不重跑** Writer 已执行并回报的验证命令——审查以 delta spec 与实现的一致性核对为主，仅在存疑时抽跑个别用例。审查**只核对契约面**（字段形状、缺省语义、判定顺序、门控一致性、调用方 / 实现方匹配、他仓规范遵循）；不涉及契约的实现细节记入报告建议项，不作为 \`FAILED\` 依据。`,
     `3. 把结果写入 \`openspec/changes/{change-name}/review-report.md\`：`,
     `   - \`Status\` 只能是 \`PENDING | PASSED | FAILED\` 之一；`,
     `   - \`FAILED\` 时逐条列出 \`Target\`（如 \`frontend-writer\`）、\`Issue\`、\`Action Required\`，并在"结论与下一动作"中给出 Remediation Task 的 assignee 建议；`,

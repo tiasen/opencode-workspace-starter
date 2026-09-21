@@ -22,7 +22,7 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 └── openspec/
     ├── FRAMEWORK.md               # 框架编排层规范
     ├── config.yaml                # OpenSpec 生效配置（npm run sync:config 同步）
-    ├── config.template.yaml       # 配置模板（rules 让官方命令按仓生成 spec）
+    ├── config.template.yaml       # 配置模板（context/rules 驱动官方命令按仓生成 spec）
     ├── specs/                     # 基线 spec（openspec archive 维护）
     ├── templates/                 # 框架扩展模板（context / review-report / tasks 派发示例）
     └── changes/
@@ -91,7 +91,7 @@ openspec init --tools opencode --force
 
 ```bash
 npm run init -- --yes   # 派生 .opencode/agents/*.md、opencode.jsonc
-# postinit 钩子随后自动执行 sync-config：把 config.template.yaml 的 schema/rules/operations 三段同步进 config.yaml
+# postinit 钩子随后自动执行 sync-config：把 config.template.yaml 的 schema/context/rules/operations 四段同步进 config.yaml
 npm run sync:config     # 一般无需手动执行；仅在你单独改过 config.template.yaml 后才需要
 ```
 
@@ -154,7 +154,7 @@ Orchestrator（Primary）
 
 - 传递给 Writer 的 Prompt 必须包含三件套：`context.md`（全局背景）+ `design.md`（跨仓方案）+ `specs/{target}/spec.md`（专属 delta spec，主文件）。
 - `tasks.md` 中每个 Task 有唯一 `Assignee`（如 `frontend-writer`）与 `Status`（`pending → in_progress → done/failed`）；Orchestrator 派发前置 `in_progress`，收到回报后更新。
-- **审查按 `context.md` 的 Review 判定执行，不是每次必跑**：跨仓契约变更、多仓联动、或需符合他仓规范时才调用 `@reviewer`，且范围只限涉及仓；纯 UI / 脚本 / 临时修复等单仓内部改动可跳过并记录理由。用户可强制全量一致性检查。
+- **审查按 `context.md` 的 Review 判定执行，不是每次必跑**：仅当**外部可观察契约变更**（接口 / 事件 / 协议 / 共享类型 / 跨仓配置契约）、需符合他仓规范、或仓自身要求时才调用 `@reviewer`；**仅涉及多仓本身不触发**。范围只限涉及仓；单仓内部、契约不变的改动（纯 UI / 文案 / 脚本 / 内部重构）可走轻量通道跳过审查并记录理由。用户可强制全量一致性检查。
 - Review `FAILED` 时，Orchestrator 解析 `review-report.md` 问题列表的 `Target / Issue / Action Required`，追加编号递增的 Remediation Task 并重新派发，直到 `PASSED`（同一问题连续失败 3 次后停下并请求人工决策）。
 - 详细规则见 `AGENTS.md` 第 4–5 节。
 
@@ -220,6 +220,8 @@ npm run upgrade -- --dry-run    # 先预览会覆盖哪些文件
 `openspec/config.yaml`、`openspec/{specs,changes}/**`、`.opencode/agents/*-writer.md`、
 `.opencode/commands/opsx-*.md`、`.opencode/skills/**`。升级后建议跑一次 `npm run init -- --yes`。
 
+> **注意：`context` 已是托管段。** `openspec/config.yaml` 的 `schema / context / rules / operations` 四段以 `config.template.yaml` 为准、会被覆盖。若你此前在 `config.yaml` 的 `context` 里写过自定义内容，请先并入 `config.template.yaml`，否则下次 `npm run sync:config` 会覆盖掉它。
+
 ## 维护者指南（开发本框架）
 
 - **模板 vs 开发目录**：用户模板在 `opencode/`（无点，提交）；仓库根的 `.opencode/` 是本机
@@ -243,14 +245,14 @@ opencode-workspace-starter/            # 源码仓库（不是用户的 workspac
 ├─ package.json                      # bin + files + 版本脚本；version = 框架版本
 ├─ template.code-workspace
 ├─ template.gitignore                # scaffold 时写成用户的 .gitignore
-├─ opencode.jsonc
 ├─ AGENTS.md
 ├─ opencode/                         # 用户模板（无点）；scaffold → 目标项目 .opencode/
 │  ├─ agents/
 │  │  ├─ orchestrator.md            # Orchestrator 主 agent（mode: primary）
 │  │  └─ reviewer.md                # 跨仓审查员（{repo}-writer.md 由 init 按仓生成）
-│  └─ commands/
-│     └─ prepare.md                  # /prepare 命令（含 frontmatter description）
+│  ├─ commands/
+│  │  └─ prepare.md                  # /prepare 命令（含 frontmatter description）
+│  └─ opencode.jsonc                 # 分发到用户项目 .opencode/opencode.jsonc
 ├─ bin/
 │  └─ create.mjs                     # scaffolding 入口（npx / node 两用）
 ├─ scripts/
@@ -267,8 +269,8 @@ opencode-workspace-starter/            # 源码仓库（不是用户的 workspac
 │  └─ version-check.yml              # PR 版本校验
 ├─ openspec/
 │  ├─ FRAMEWORK.md                   # 框架编排层规范（artifact 格式以官方 schema 为准）
-│  ├─ config.yaml                    # OpenSpec 生效配置（由模板同步，勿手改三段）
-│  ├─ config.template.yaml           # 配置模板（schema/rules/operations 以此为准）
+│  ├─ config.yaml                    # OpenSpec 生效配置（由模板同步，勿手改四段）
+│  ├─ config.template.yaml           # 配置模板（schema/context/rules/operations 以此为准）
 │  ├─ specs/
 │  │  └─ .gitkeep
 │  ├─ changes/

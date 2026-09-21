@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url";
 
 const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-/** 以模板为准的三段；其余顶层键一律保留用户版本。 */
-const MANAGED_KEYS = ["schema", "rules", "operations"];
+/** 以模板为准的四段；其余顶层键一律保留用户版本。 */
+const MANAGED_KEYS = ["schema", "context", "rules", "operations"];
 
 /**
  * 按顶层 key 切分 YAML 文本。
@@ -85,7 +85,7 @@ const BOOTSTRAP_HEADER = [
   "# openspec/config.yaml — OpenSpec 项目配置（生效文件）",
   "#",
   "# 由 openspec/config.template.yaml 经 `npm run sync:config` 自动建出：",
-  "#   - schema / rules / operations 三段请改模板后同步，勿直接改此文件；",
+  "#   - schema / context / rules / operations 四段请改模板后同步，勿直接改此文件；",
   "#   - 其余顶层键可自由添加，同步时原样保留。",
   "",
 ];

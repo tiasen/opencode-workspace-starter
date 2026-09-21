@@ -1,7 +1,7 @@
 # openspec/config.yaml — OpenSpec 项目配置（生效文件）
 #
 # 本文件由 openspec/config.template.yaml 经 `npm run sync:config` 生成/同步：
-#   - schema / rules / operations 三段请改模板后同步，勿直接改此文件；
+#   - schema / context / rules / operations 四段请改模板后同步，勿直接改此文件；
 #   - 其余顶层键可自由添加，同步时原样保留。
 
 schema: spec-driven
@@ -12,6 +12,18 @@ context: |
   Tech stack and per-repo conventions live in each repo's own AGENTS.md — read it live.
   Execution is dispatched by the Orchestrator to per-repo Writer agents via the Task tool.
 
+  Workflow discipline (strict, must follow): phases are user-driven through the official
+  /opsx-* commands. Explore only discusses and writes no artifacts. Propose drafts the
+  artifacts and then STOPS for user review — never start implementation or dispatch in the
+  same response. Apply is the only phase that dispatches implementation. Archive runs only
+  on explicit user command. Never advance a phase on your own.
+
+  Review is conditional: invoke the reviewer only when the change alters an externally
+  observable contract (API / events / protocol / shared types / cross-repo config), or must
+  conform to another repo's spec (e.g. a design repo's DESIGN.md). Involving two or more repos
+  is not by itself a trigger — a repo-internal normalization/refactor that leaves boundary
+  contracts unchanged does not trigger. Otherwise skip review and record the reason in context.md.
+
 rules:
   proposal:
     - State which sub-apps participate and their roles in this change.
@@ -19,18 +31,24 @@ rules:
     - Generate exactly one delta spec per participating sub-app; never merge multiple sub-apps into a single spec file.
     - Read .code-workspace folders first (workspace-root excluded); the capability path MUST equal the sub-app folder name, e.g. specs/frontend/spec.md.
     - Each delta spec covers only that sub-app's behavior changes, in Requirement/Scenario format with ADDED/MODIFIED/REMOVED markers.
+    - The delta specs are the single source of truth: writers implement against them and the reviewer judges against them.
   design:
-    - Contracts at sub-app boundaries must be field-precise; they are the cross-repo review baseline.
+    - design.md is non-normative: it explains how/why but does not carry the binding contract.
+    - Contracts at sub-app boundaries must still be field-precise, but any MUST / field shape / decision order that constrains implementation must also be carried by the corresponding delta spec's Requirement/Scenario.
+    - Include an affected-files-and-change-points list (path -> add/modify/delete + key change shape) as the writer's construction map.
   tasks:
     - One task maps to exactly one sub-app; declare Assignee ({repo}-writer) and Status on every task.
     - Cross-sub-app dependencies are expressed as task ordering, never as a single spanning task.
+    - Merge sequential tasks that share the same assignee and the same sub-app into a single dispatch (fewer cold starts); tasks spanning different sub-apps are never merged.
 
 operations:
   apply:
     guidance:
       - Run only when the user explicitly invokes apply; never auto-advance into it.
       - Do not implement tasks directly in this session. Implementation is dispatched by the Orchestrator to per-repo Writer agents via the Task tool; see AGENTS.md section 4.
-      - Invoke the reviewer only when the review-trigger criteria are met (cross-repo contract, interacting repos, or another repo's spec); otherwise skip and record why in context.md. Scope the reviewer to the involved repos only, unless the user requests a full consistency check.
+      - Merge same-assignee/same-sub-app sequential tasks into one dispatch; record each task's `task_id` and resume the original writer session by `task_id` for remediation instead of opening a new cold-start session.
+      - Use scoped verification commands; never re-run a verification the writer already executed and reported.
+      - Invoke the reviewer only when an externally observable contract changed (API / events / protocol / shared types / cross-repo config) or the change must follow another repo's spec; involving multiple repos is not by itself a trigger. Otherwise skip and record why in context.md. Scope the reviewer to the involved repos only, unless the user requests a full consistency check.
   archive:
     guidance:
       - Run only when the user explicitly invokes archive; never archive automatically.

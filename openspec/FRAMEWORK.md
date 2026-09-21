@@ -6,9 +6,9 @@
 
 ```text
 openspec/
-├── AGENTS.md               # 本规范文件（框架编排层）
+├── FRAMEWORK.md            # 本规范文件（框架编排层）
 ├── config.yaml             # OpenSpec 项目配置（生效文件，由 config.template.yaml 同步）
-├── config.template.yaml    # 配置模板（schema/rules/operations 以此为准）
+├── config.template.yaml    # 配置模板（schema/context/rules/operations 以此为准）
 ├── specs/                  # 基线 spec（跨 change 的长期契约，由 openspec archive 维护）
 └── changes/
     ├── .gitkeep
@@ -16,7 +16,7 @@ openspec/
         ├── .openspec.yaml  # Change 元数据（官方命令自动生成）
         ├── proposal.md     # 背景、目标（官方 artifact）
         ├── context.md      # 全局背景、技术约束、受影响仓库清单（框架扩展）
-        ├── design.md       # 跨仓技术方案、接口契约、数据流、风险（官方 artifact）
+        ├── design.md       # 跨仓技术方案、数据流、风险（官方 artifact，非规范性）
         ├── tasks.md        # 可派发的原子任务列表（官方格式 + 本框架 Assignee/Status）
         ├── review-report.md# Reviewer 审查报告（框架扩展，仅 Reviewer 可写）
         └── specs/
@@ -26,7 +26,7 @@ openspec/
 
 `openspec/templates/` 只存放框架扩展文件（`context.md`、`review-report.md`）与
 `tasks.md` 派发格式示例；官方四件套由 `/opsx-propose` 生成（规则见 `config.yaml`），详见
-`template/README.md`。项目配置变更流程：改 `config.template.yaml` → 跑 `npm run sync:config`。
+`templates/README.md`。项目配置变更流程：改 `config.template.yaml` → 跑 `npm run sync:config`。
 
 ## 2. 命名规范
 
@@ -45,23 +45,36 @@ openspec/
 
 ### context.md
 
-包含：全局背景、受影响仓库清单（含各仓路径、当次角色、验证命令）、技术约束（版本、兼容性、时间窗口）、术语表。必须列出本次 Change 涉及的全部仓库及其 `AGENTS.md` 关键约束摘要。清单现写现用，不设常驻快照；角色是相对当次 Change 而言的，不得理解为仓库固有属性。
+包含：全局背景、受影响仓库清单（含各仓路径、当次角色、验证命令）、技术约束（版本、兼容性、时间窗口）、术语表。必须列出本次 Change 涉及的全部仓库及其 `AGENTS.md` 关键约束摘要。清单现写现用，不设常驻快照；角色是相对当次 Change 而言的，不得理解为仓库固有属性。验证命令必须是 scoped 形式（见 `AGENTS.md` §4.3）；若某仓约定命令**基线为红**，在此标注并给出 scoped 替代，本次 Change 内禁止修复该既有失败。
 
-### design.md（官方）
+### design.md（官方）—— 非规范性支撑文档
 
-增量要求：子应用边界处的接口契约必须精确到字段级——它是 Reviewer 跨仓审查的基准。除此之外包含跨仓技术方案、数据流、错误处理策略、风险与回滚方案。
+增量要求：子应用边界处的接口契约必须精确到字段级。除此之外包含跨仓技术方案、数据流、错误处理策略、风险与回滚方案。同时必须包含**受影响文件与改动点**清单：逐条列出 `{文件路径} → {新增 / 修改 / 删除} + {关键改动形状}`，作为 Writer 的施工图（非规范性，契约以 delta spec 为准），以减少 Writer 在仓内重新探索的轮次。
 
-### specs/{repo}/spec.md
+`design.md` 是**非规范性（non-normative）**文档：它解释"为什么这样设计"，不单独承载契约。凡要约束 Writer 行为的 MUST / 字段形状 / 判定顺序，都必须同时写进对应的 `specs/{repo}/spec.md`；`design.md` 中不得存在 delta spec 未覆盖的契约约束。
+
+### specs/{repo}/spec.md —— 唯一规范来源（normative）
 
 每个仓一个 capability 目录、一份 delta spec，只描述该仓的行为变更：修改范围（文件列表）、接口/类型变更、前后行为对比、迁移步骤、验收命令。Writer 以此文件为主文件执行任务。`context.md` 与 `review-report.md` 是本框架在官方 schema 之上的扩展文件（见下）。
 
+**单一规范源**：对实现与验收有约束力的契约只认 delta spec 的 Requirement/Scenario——Writer 照 spec 实现，Reviewer 照 spec 判定，不得以 `design.md` 作为判定依据。
+
 ### tasks.md（官方格式 + 框架派发元数据）
 
-官方 checklist 之上，每个 Task 必须包含：Assignee（`{repo}-writer`）、Status（`pending | in_progress | done | failed`）、上下文文件链接组、修改范围、Acceptance 清单（格式示例见 `templates/tasks.md`）。Remediation Task 必须额外引用 `review-report.md` 的问题编号。单仓原子性：一个 Task 只归属一个仓库，其修改范围不得横跨 ≥2 个仓；跨仓工作先拆成多个单仓 Task，依赖用 Task 顺序表达。
+官方 checklist 之上，每个 Task 必须包含：Assignee（`{repo}-writer`）、Status（`pending | in_progress | done | failed`）、上下文文件链接组、修改范围、Acceptance 清单（格式示例见 `templates/tasks.md`）。Remediation Task 必须额外引用 `review-report.md` 的问题编号。单仓原子性：一个 Task 只归属一个仓库，其修改范围不得横跨 ≥2 个仓；跨仓工作先拆成多个单仓 Task，依赖用 Task 顺序表达。同一 Assignee、同一仓、顺序依赖的 Task 宜合并为一个 Task 一次派发以减少冷启动；Remediation Task 优先恢复原 Writer 子会话执行。
 
 ### review-report.md
 
 格式见 `templates/review-report.md`。仅 Reviewer 可写。`Status` 只能是 `PENDING | PASSED | FAILED` 之一。`FAILED` 时必须逐项列出 `Target`、`Issue`、`Action Required`。
+
+### Propose 收尾一致性自检（强制）
+
+在停止请用户 review 之前，逐条比对：
+
+1. `design.md` 中的每一条 MUST / 契约约束 / 判定分支，是否都能在某个 `specs/{repo}/spec.md` 的 Requirement/Scenario 找到对应验收？
+2. 每条 Requirement/Scenario 是否只描述该仓自身行为，且其验收命令可执行？
+
+出现"只写在 design、没进 spec"的条目，先补齐 spec 再停止。禁止把这种不一致带入 Apply：那会让 Writer 按 spec 实现、Reviewer 按 design 判定，必然返工。
 
 ## 4. 阶段门禁与生命周期（严格遵循官方 OpenSpec）
 
@@ -98,9 +111,11 @@ draft → awaiting-review → applying → reviewing → (remediating → review
 
 跨仓一致性审查**不是每次必跑**，由 Orchestrator 按"改动性质 + 涉及仓 + 各仓 `AGENTS.md` 要求"判定，并记入 `context.md`：
 
-- **触发**：跨仓契约变更（接口 / 类型 / 事件 / 协议 / 配置）；≥2 仓存在调用或上下游关系；改动须符合他仓拥有的规范（如设计仓 `DESIGN.md`）；目标仓 `AGENTS.md` 要求审查；用户显式要求。
+- **触发（命中任一）**：**外部可观察契约变更**（接口 / 事件 / 协议 / 共享类型 / 跨仓配置契约）；改动须符合他仓拥有的规范（如设计仓 `DESIGN.md`）；目标仓 `AGENTS.md` 要求审查；用户显式要求。**仅涉及多仓、或仅在仓内部做归一化 / 重构（对外契约不变）不触发。**
 - **可跳过（须记理由）**：单仓内部且不改对外契约（纯 UI / 样式 / 文案 / 内部重构）；临时或一次性产物（脚本、实验、不交付）；仅注释 / 文档措辞；用户声明无需审查。
+- **轻量通道**：单仓、契约不变、改动面小的 Change，允许单 Writer + 跳过审查，并在 `context.md` 记录。
 - **范围**：默认只覆盖涉及仓与对应 Writer；仅用户强制"全量一致性检查"时覆盖所有业务仓。
+- **清单聚焦**：审查只核对契约面（字段形状、缺省语义、判定顺序、门控一致性、调用方 / 实现方匹配、他仓规范遵循），不做全量回归重跑。
 - 判不准时倾向执行，并在 Propose 的 review gate 呈给用户确认。
 
 ## 6. 权限规则

@@ -9,7 +9,7 @@
 - 启动方式：在 TUI 中用 Tab 切换到 `orchestrator` agent（`opencode.jsonc` 已将其设为 `default_agent`，新会话默认即是；agent 定义见 `.opencode/agents/orchestrator.md`）。
 - 你拥有全局**读**权限，可读取所有仓库代码、`AGENTS.md` 与 `openspec/` 文档，用于理解架构与制定方案。
 - 你拥有 `openspec/**` 的**写**权限，用于创建与更新 Spec Change（proposal / context / design / tasks / specs），**唯独 `review-report.md` 不可写**（那是 Reviewer 的）。
-- 你拥有 `task` 调度权限，可唤起 `*-writer` 与 `reviewer` 子 Agent。
+- 你拥有 `task` 调度权限，可唤起 `*-writer`、`reviewer`，以及需要机械检索时使用内置 `explore` 子 Agent。
 - **绝对禁止直接修改任何业务仓代码。** `permission.edit` 中除 `openspec/**` 外全部为 `deny`，这是物理约束，不是建议。任何业务代码变更必须通过 Task 分发给对应 Writer 执行。
 - 你不写业务代码、不做跨仓的直接文件编辑、不绕过 Reviewer 合并结论。
 
@@ -49,12 +49,16 @@
 |------|------|--------|------|
 | `proposal.md` | 背景、目标、非目标 | Orchestrator | 官方 artifact |
 | `specs/{repo}/spec.md` | 按仓拆分的 delta spec（capability 目录名 = 仓名） | Orchestrator | 官方 artifact |
-| `design.md` | 跨仓技术方案、接口契约、数据流、风险 | Orchestrator | 官方 artifact |
+| `design.md` | 跨仓技术方案、数据流、风险（非规范性，契约以 delta spec 为准） | Orchestrator | 官方 artifact |
 | `tasks.md` | 原子任务列表（含 Assignee / Status） | Orchestrator | 官方 artifact + 框架元数据 |
 | `context.md` | 全局背景、技术约束、受影响仓库清单 | Orchestrator | 框架扩展（Propose 补齐） |
 | `review-report.md` | Reviewer 一致性审查报告 | Reviewer | 框架扩展 |
 
-Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 生成四件套 → 按仓细化 `specs/{repo}/spec.md` 并补 `context.md` → 整理 `tasks.md` 的 Assignee/Status → **停止，请用户 review**。
+**单一规范源**：对实现与验收有约束力的契约只认 `specs/{repo}/spec.md`（Writer 照它实现、Reviewer 照它判定）；`design.md` 是非规范性支撑文档，不得存在 delta spec 未覆盖的 MUST / 契约约束。两者不一致时以 delta spec 为准。
+
+**施工图**：`design.md` 必须给出"受影响文件与改动点"清单（文件 → 新增 / 修改 / 删除 + 关键改动形状），作为 Writer 的施工依据，减少其在仓内重新探索的轮次。该清单非规范性，契约仍以 delta spec 为准。
+
+Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 生成四件套 → 按仓细化 `specs/{repo}/spec.md` 并补 `context.md` → **做一次 design↔spec 一致性自检**（design 中每条 MUST / 契约约束都能在某个 delta spec 的 Requirement/Scenario 找到对应验收，否则先补齐 spec）→ 整理 `tasks.md` 的 Assignee/Status → **停止，请用户 review**。
 
 ## 4. Apply 阶段的派发机制
 
@@ -72,6 +76,12 @@ Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 
 
 使用 OpenCode Task 工具唤起对应 Sub-Agent，例如 `@frontend-writer`、`@backend-writer`。相互无依赖的 Task **并发**派发，有依赖的 Task **按顺序**派发并在前序 Task 回报完成后再派发后续 Task。
 
+**减少会话数（冷启动成本）**：每唤起一个 Sub-Agent 都是一次冷启动（重新加载系统提示 + `AGENTS.md` + 三件套 + 相关源码），是主要延迟来源。因此：
+
+- **同仓合并**：同一 Assignee、同一仓、顺序依赖的多个 Task，尽量合并为一个 Task 一次派发（仍须满足 §4.5 规则二的单仓原子性——合并只允许发生在同一仓内）。跨仓任务仍严禁合并。
+- **Remediation 复用会话**：每次派发后记录 Task 工具返回的 `task_id`；修复失败的 Remediation Task 优先**以同一 `task_id` 恢复原 Writer 子会话**（保留其已读代码与上下文），仅当原会话不可用时才新开。不要为每个失败项都新开一个冷启动会话。
+- **并行判据**：两个 Task 之间只要不存在"后者的实现或验证必须读取前者产物"的依赖，就必须**并发**派发（可在同一响应里同时发起多个 Task）。跨仓但互不依赖（如契约冻结后的多个消费方）属于必须并发的场景，不得因"稳妥"而保守串行。
+
 ### 4.3 传递给 Sub-Agent 的 Prompt 结构
 
 每个 Task 使用以下结构构造 Prompt（将 `{change-name}`、`{N}` 替换为实际值）：
@@ -81,6 +91,26 @@ Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 
 示例：
 
 > "请读取并执行 `openspec/changes/user-auth-v2/tasks.md` 中的 Task 1。上下文文件如下：`openspec/changes/user-auth-v2/context.md`、`openspec/changes/user-auth-v2/design.md`、`openspec/changes/user-auth-v2/specs/frontend/spec.md`。本仓上下文：路径 `../frontend`、验证命令 `npm run typecheck`。你的修改范围限定在本仓内。完成修改后运行 `npm run typecheck` 并回报。"
+
+#### 验证命令（scoped，强制）
+
+Prompt 中的 `{commands}` 必须是**只覆盖本次改动面**的命令，而不是全仓广扫：
+
+- 优先使用仓内可用的 scoped 形式（按改动文件/包运行测试与 lint）；只有仓库确实只提供全量命令时才退化为全量。
+- 若某仓约定的验证命令**基线为红**（存在与本次改动无关的既有失败），必须先把它标注在 `context.md`，并改用 scoped 命令；**禁止要求 Agent 修复或调查与本次改动无关的既有失败**。
+
+#### 验证去重（强制）
+
+- Orchestrator **不重复执行** Writer 已执行并在回报中给出结果的同一验证命令；复核改为看 diff / 抽查关键断言或个别用例。
+- 同一份代码在一次 Change 内不得被多个 Agent 反复跑同一全量命令。Writer 的验证回报即为该命令的权威结果（除非有具体理由怀疑）。
+- Reviewer 默认不重跑 Writer 已跑过的验证；审查以 delta spec 与实现/契约的一致性核对为主（见 §5.4），仅在存疑时抽跑。
+
+#### 控制单会话轮次（建议）
+
+本框架的耗时大头是"轮次 × 每轮固定延迟"，而非 token 花费。因此：
+
+- Prompt 中提示 Writer / Reviewer：**批量读取优先于逐个读取**（一次读多个相关文件或整个目录），减少工具往返；机械性检索可交给 `explore` 子代理一次性完成。
+- 若某仓 Writer 因机械动作（跑命令、读文件）反复产生大量轮次，可为其指定更快的模型——但 `.opencode/agents/*.md` 由 `npm run init` 生成、会被重写，模型须配在生成源（`scripts/init.mjs` 或你的运行配置）里，勿手改生成物。
 
 ### 4.4 状态跟踪
 
@@ -112,9 +142,9 @@ Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 
 
 ### 5.1 何时触发审查（命中任一即调用 `@reviewer`）
 
-- **跨仓契约变更**：涉及接口 / API、共享类型与数据模型、事件 / 消息、协议、配置契约等在仓边界上可观察的约定。
-- **多仓联动**：本次 Change 涉及 ≥2 个仓，且存在调用方 / 实现方或上下游依赖。
+- **外部可观察契约变更**：在仓边界上可观察的约定发生变更——接口 / API、事件 / 消息、协议、共享类型与数据模型、跨仓配置契约。**仅涉及多仓、或仅在仓内部做归一化 / 重构（对外契约不变）不触发。**
 - **依赖他仓规范**：改动须符合另一仓拥有的规范（如设计仓的 `DESIGN.md`、UI 规范、API 契约文档），即存在隐性跨 agent 边界（例如前端 UI 改动受设计仓规范约束）。
+- **调用方 / 实现方契约联动**：存在调用方与实现方成对改动。多仓本身只是加重因素，不是独立触发条件——判据仍是"仓边界契约是否变化"。
 - **仓自身要求**：任一目标仓的 `AGENTS.md` 明确要求其变更需一致性 / 契约审查。
 - **用户显式要求**：用户要求审查，或要求"全量一致性检查"。
 
@@ -125,12 +155,15 @@ Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 
 - **仅注释 / 文档措辞**，不影响任何契约，也不依赖他仓规范。
 - **用户显式声明**本次无需审查。
 
+**轻量通道（可选）**：单仓、对外契约不变、改动面小的 Change，允许只拆**一个** Writer Task、**跳过** `@reviewer`，Orchestrator 汇总验证结果后直接停下等 `/opsx-archive`。走轻量通道必须在 `context.md` 的 Review 判定里写明"轻量通道 + 理由"。
+
 判不准时的默认：**倾向执行审查**，并在 Propose 的 review gate 把判定一并呈给用户确认（用户可当场改为强制全量或豁免）。
 
 ### 5.3 审查范围
 
 - 默认**只覆盖本次 Change 涉及的仓与对应 Writer**（involved subagents），不扩展到他仓。
 - 仅当用户强制"全量一致性检查"时，覆盖 `.code-workspace` 中所有业务仓。
+- 审查**只核对契约面**：字段形状、缺省语义、判定顺序、门控一致性、调用方与实现方是否匹配、是否符合被依赖的他仓规范。不做全量回归重跑（见 §4.3 验证去重）；不涉及契约的实现细节记入报告建议项，不作为 `FAILED` 依据。
 
 ### 5.4 执行闭环（仅当判定为需要审查）
 

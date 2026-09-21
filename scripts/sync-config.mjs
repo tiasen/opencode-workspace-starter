@@ -3,8 +3,8 @@
  * sync-config.mjs — 将 openspec/config.template.yaml 同步到 openspec/config.yaml
  *
  * 设计原则：调用方永远只调这一个命令，顺序依赖在内部解决。
- *   - openspec/config.yaml 存在 → 分段合并后写回（schema/rules/operations
- *     三段以模板为准，其余顶层键原样保留；连续跑两次零 diff）。
+ *   - openspec/config.yaml 存在 → 分段合并后写回（schema/context/rules/operations
+ *     四段以模板为准，其余顶层键原样保留；连续跑两次零 diff）。
  *   - openspec/config.yaml 缺失 → 按模板全文建出（含 openspec/specs、openspec/changes
  *     占位），并提示日后补跑 `openspec init` 安装官方命令集成。
  *   - 不自动运行 `openspec init`：它是第三方交互式脚手架，自动跑有覆盖风险；
