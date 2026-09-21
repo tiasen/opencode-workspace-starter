@@ -247,29 +247,52 @@ function agentFrontmatter(description, permission) {
   return lines.join("\n");
 }
 
-/**
- * 把绝对路径转成"路径段锚定"通配符：/a/b/fc-barcelona → 以双层星号开头、
- * 以目录 basename 为路径段、再以双层星号结尾的 pattern。
- *
- * 为什么不用相对路径（如 ../fc-barcelona 那种）：opencode 的权限 pattern 会随
- * 会话解析出的项目根变化；当项目根被解析成 / 时，相对 pattern 全部匹配不上，
- * 最终落到兜底 deny，所有编辑被拒。路径段锚定 pattern 无论根是 workspace-root
- * 还是 / 都命中。
- */
+// ---------------------------------------------------------------------------
+// 权限 pattern 生成（改之前务必读懂，这里有两个反直觉的 opencode 语义）
+// ---------------------------------------------------------------------------
+//
+// 1) `edit` 权限的匹配对象是 **worktree 相对路径**
+//    （opencode 源码：write / edit 工具提交 `path.relative(Instance.worktree, filepath)`）。
+//      - workspace-root 是 git 仓时 → 仓内文件提交为 `openspec/changes/x/tasks.md`（无前导 /）；
+//      - workspace-root 不是 git 仓时（Instance.worktree === "/"）→ 提交为
+//        `Users/x/proj/openspec/changes/x/tasks.md`（绝对路径去掉前导 /）。
+//
+// 2) 通配符是**简单匹配**，不是 glob：`*` 被替换成 `.*`，可匹配任意字符**包括 `/`**；
+//    `**` 不是 globstar，等价于 `*`。于是 `**/openspec/**` 的正则是 `.*\/openspec\/.*`，
+//    **要求 `openspec` 前面必须有一个 `/`** —— 它匹配不了 `openspec/changes/x/tasks.md`。
+//
+// 结论：锚定"仓内路径"（如 openspec）时，必须**同时**给出两种形式：
+//   - 相对形式   `openspec/**`      ← git 仓（worktree 相对）
+//   - 段锚定形式 `**/openspec/**`   ← 非 git 仓 / 其他根（绝对路径去前导 /）
+// 只写一种，必然在其中一种环境下静默失效；而 subagent 里未决的 `ask` 会退化为 `deny`，
+// 没有交互可救，表现为"Writer 只能靠 bash 写文件"。
+//
+// 另外：规则顺序即优先级（opencode: 最后匹配获胜），兜底 deny 必须排在最前。
+
+/** 相对 workspace-root 的 POSIX pattern（如 "../frontend" → "../frontend/**"）。 */
+function relScope(relPath) {
+  return `${relPath.split(path.sep).join("/")}/**`;
+}
+
+/** 路径段锚定 pattern（如 "**\/frontend/**"），覆盖非 git 项目与 worktree 场景。 */
 function segmentScope(absPath) {
   return `**/${path.basename(absPath)}/**`;
 }
 
 function writerMarkdown(folder) {
   // relPath 为 "." 的 folder 不应生成 writer（那是 workspace-root 本身）
+  const rel = relScope(folder.relPath);
   const scope = segmentScope(folder.absPath);
   const agentsRef = `${folder.relPath}/AGENTS.md`;
   const front = agentFrontmatter(
     `负责修改 ${folder.originalName} 仓库代码与契约实现的 Sub-Agent`,
     {
-      // 铁律（opencode 语义：最后匹配获胜）：兜底 `**` deny 必须排在最前，
-      // 具体 allow 排在其后才生效；写反 = allow 被兜底 deny 吞掉。
-      edit: { "**": "deny", [scope]: "allow" },
+      // 相对形式在前、段锚定在后，两者都 allow；兜底 `**` deny 必须排在最前。
+      // 相对形式覆盖"子应用在 workspace-root 内部"（此时路径不含 /<name>/ 前缀），
+      // 段锚定形式覆盖 worktree（../<name>/...）与非 git 项目（绝对路径去前导 /）。
+      edit: { "**": "deny", [rel]: "allow", [scope]: "allow" },
+      // external_directory 的匹配对象是**绝对路径**，故只保留段锚定形式
+      // （相对形式对绝对路径永远匹配不上；段锚定同时对 worktree 的成员路径安全）。
       external_directory: { "**/openspec/**": "allow", [scope]: "allow" },
     }
   );
@@ -280,7 +303,7 @@ function writerMarkdown(folder) {
     ``,
     `## 作用域（硬性）`,
     ``,
-    `- 只写 \`${scope}\` 下的文件；\`openspec/\` 与其他仓库一律只读，绝不写入。`,
+    `- 只写 \`${folder.relPath}\`（${folder.originalName} 仓）下的文件；\`openspec/\` 与其他仓库一律只读，绝不写入。`,
     ``,
     `## 工作协议`,
     ``,
@@ -302,8 +325,12 @@ function writerMarkdown(folder) {
 // （upgrade 分发模板、init 重写同一文件，只改一侧会导致规则被静默回滚）。
 function reviewerMarkdown() {
   const front = agentFrontmatter(`负责跨仓一致性审查的 Reviewer Agent`, {
-    // 兜底 deny 在前、唯一 allow 在后（最后匹配获胜）
-    edit: { "**": "deny", "**/openspec/changes/*/review-report.md": "allow" },
+    // 兜底 deny 在前，两种形式都 allow（最后匹配获胜）。见文件上方权限说明。
+    edit: {
+      "**": "deny",
+      "openspec/changes/*/review-report.md": "allow",
+      "**/openspec/changes/*/review-report.md": "allow",
+    },
     external_directory: { "**": "allow" },
   });
   const body = [
@@ -347,11 +374,16 @@ function orchestratorConfig(writerNames) {
     // 新会话默认进入 orchestrator agent；全局权限同时约束其他 agent。
     default_agent: "orchestrator",
     permission: {
-      // 兜底 deny 在前，具体 allow 在后（opencode: 最后匹配获胜）；
-      // 统一用 `**/` 路径段锚定，避免项目根解析异常时相对 pattern 失效。
+      // 兜底 deny 在前，具体 allow 在后（opencode: 最后匹配获胜）。
+      // edit 的匹配对象是 worktree 相对路径，故 openspec 必须同时给两种形式：
+      //   openspec/**      ← workspace-root 是 git 仓（仓内相对路径）
+      //   **/openspec/**   ← 不是 git 仓（绝对路径去前导 /）
+      // 详见本文件上方"权限 pattern 生成"的说明。
       edit: {
         "**": "deny",
+        "openspec/**": "allow",
         "**/openspec/**": "allow",
+        "openspec/changes/*/review-report.md": "deny",
         "**/openspec/changes/*/review-report.md": "deny",
       },
       external_directory: {
@@ -360,7 +392,11 @@ function orchestratorConfig(writerNames) {
       task,
       bash: {
         "opencode *": "allow",
+        // 注意 `*` 要求后面有空格，故无参的 `git status` 需单独一条。
+        // `git status` 是只读命令，放项目级；`git -C *` 只放在 orchestrator 的 agent 文件里，
+        // 不放项目级（否则所有 agent 都能跑任意 git 命令）。
         "git status": "allow",
+        "git status *": "allow",
       },
     },
     instructions: ["AGENTS.md"],
@@ -484,7 +520,8 @@ async function main() {
       `由 scripts/init.mjs 自动生成。writers: [${writerNames.join(", ") || "(none)"}]`,
       `workspace: ${path.basename(workspaceFile)}`,
       '权限语义（opencode: 最后匹配获胜）：兜底 deny 在前、具体 allow 在后；',
-      'pattern 用路径段锚定（前缀带双层星号），项目根解析异常时仍能命中。',
+      'edit 的匹配对象是 worktree 相对路径，且通配符是简单匹配（* 可含 /，** 非 globstar），',
+      '故锚定仓内路径时同时给出相对形式（openspec/**）与段锚定形式（**/openspec/**）。',
     ]
   );
   if (args.dryRun) {

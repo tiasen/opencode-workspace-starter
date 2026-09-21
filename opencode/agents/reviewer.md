@@ -4,6 +4,7 @@ mode: subagent
 permission:
   edit:
     "**": deny
+    "openspec/changes/*/review-report.md": allow
     "**/openspec/changes/*/review-report.md": allow
   external_directory:
     "**": allow

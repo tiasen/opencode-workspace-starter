@@ -2,14 +2,17 @@
 // 由 scripts/init.mjs 自动生成。writers: [frontend, backend]
 // workspace: template.code-workspace
 // 权限语义（opencode: 最后匹配获胜）：兜底 deny 在前、具体 allow 在后；
-// pattern 用路径段锚定（前缀带双层星号），项目根解析异常时仍能命中。
+// edit 的匹配对象是 worktree 相对路径，且通配符是简单匹配（* 可含 /，** 非 globstar），
+// 故锚定仓内路径时同时给出相对形式（openspec/**）与段锚定形式（**/openspec/**）。
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "orchestrator",
   "permission": {
     "edit": {
       "**": "deny",
+      "openspec/**": "allow",
       "**/openspec/**": "allow",
+      "openspec/changes/*/review-report.md": "deny",
       "**/openspec/changes/*/review-report.md": "deny"
     },
     "external_directory": {
@@ -22,7 +25,8 @@
     },
     "bash": {
       "opencode *": "allow",
-      "git status": "allow"
+      "git status": "allow",
+      "git status *": "allow"
     }
   },
   "instructions": [

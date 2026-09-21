@@ -237,11 +237,12 @@ description: "负责修改 frontend 仓库代码与契约实现的 Sub-Agent"
 mode: subagent
 permission:
   edit:
-    "**": deny                  # 兜底 deny 必须在前（opencode: 最后匹配获胜）
-    "**/frontend/**": allow      # 路径段锚定，项目根解析异常时仍命中
+    "**": deny                   # 兜底 deny 必须在前（opencode: 最后匹配获胜）
+    "../frontend/**": allow       # worktree 相对形式（仓在 workspace-root 之外）
+    "**/frontend/**": allow       # 路径段锚定（worktree / 非 git 项目）
   external_directory:
     "**/openspec/**": allow
-    "**/frontend/**": allow
+    "**/frontend/**": allow       # external_directory 按绝对路径匹配，故只保留段锚定
 ---
 
 # frontend Writer
@@ -250,10 +251,28 @@ permission:
 
 新增仓库时往 `.code-workspace` 的 `folders` 追加一项，运行 `npm run init -- --yes` 即可生成新的 writer。
 
-> **权限顺序陷阱**：opencode 的权限规则按"最后匹配获胜"求值。兜底 `**` deny 若排在
-> 具体 allow 之后，会吞掉 allow，导致编辑全被拒（现象：agent 只能用 bash 写文件）。
-> 生成的配置已按"兜底在前、具体在后"排列，并统一用 `**/` 路径段锚定——即使 opencode
-> 把项目根解析成 `/`，权限依然命中。若你手改过这些文件，重新运行 `npm run init` 恢复。
+> **权限 pattern 的两个反直觉语义**（踩过坑，改配置前务必读）：
+>
+> 1. **`edit` 的匹配对象是 worktree 相对路径**（opencode 源码提交
+>    `path.relative(Instance.worktree, filepath)`）。workspace-root **是 git 仓**时，仓内文件
+>    提交为 `openspec/changes/x/tasks.md`（无前导 `/`）；**不是 git 仓**时提交为
+>    `Users/x/proj/openspec/changes/x/tasks.md`（绝对路径去掉前导 `/`）。
+> 2. **通配符是简单匹配，不是 glob**：`*` 被替换成 `.*`，可匹配任意字符**包括 `/`**；
+>    `**` 不是 globstar，等价于 `*`。于是 `**/openspec/**` 的正则要求 `openspec` 前面必须有
+>    一个 `/` —— **它匹配不了 `openspec/changes/x/tasks.md`**。
+>
+> 因此锚定仓内路径时必须**同时**给出相对形式（`openspec/**`）与段锚定形式
+> （`**/openspec/**`）；只写一种，必然在其中一种环境下静默失效。
+>
+> 另外两点：规则顺序即优先级（最后匹配获胜），兜底 `**` deny 必须排在最前；
+> subagent 里未决的 `ask` 会**退化为 `deny`**，没有交互可救——所以 pattern 写错的表现
+> 就是"agent 只能用 bash 写文件"。若你手改过这些文件，重新运行 `npm run init` 恢复。
+>
+> 排查手段（按可靠度排序）：
+> 1. `opencode debug agent <agent-name>` 看解析后的规则（含项目配置与 agent 规则的合并顺序，agent 规则在后）；
+> 2. `opencode debug config` 看项目级原始规则；
+> 3. 看运行日志 `rg "evaluated permission=edit pattern=openspec" ~/.local/share/opencode/log/opencode.log | tail -1`
+>    —— 期望命中 `action.pattern=openspec/**`（TUI 会话）。
 
 ## 版本与升级
 

@@ -4,7 +4,9 @@ mode: primary
 permission:
   edit:
     "**": deny
+    "openspec/**": allow
     "**/openspec/**": allow
+    "openspec/changes/*/review-report.md": deny
     "**/openspec/changes/*/review-report.md": deny
   task:
     "*-writer": allow
@@ -12,6 +14,7 @@ permission:
   bash:
     "opencode *": allow
     "git status": allow
+    "git status *": allow
     "git -C *": allow
 ---
 
