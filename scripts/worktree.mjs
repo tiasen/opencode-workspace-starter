@@ -183,7 +183,25 @@ function printHelp() {
 // ---------------------------------------------------------------------------
 
 function loadContext(args) {
-  const root = args.root ? path.resolve(process.cwd(), args.root) : STARTER_ROOT;
+  // 若当前在某个 worktree 内，基准必须从它的清单反推：
+  // 实例里的 .code-workspace 解析出来的是实例成员，不是主树，不能当作主树路径用。
+  const enclosing = findEnclosingWorktree(process.cwd());
+  let root;
+  let wtRoot = null;
+  if (enclosing) {
+    const m = readManifest(enclosing.root);
+    const rootMember = m?.members?.find((x) => x.repo === "workspace-root");
+    if (!rootMember) {
+      fail(`worktree 清单缺少 workspace-root 成员，无法定位主树: ${manifestPath(enclosing.root)}`);
+    }
+    root = args.root ? path.resolve(process.cwd(), args.root) : rootMember.main;
+    wtRoot = args.worktreesDir
+      ? path.resolve(process.cwd(), args.worktreesDir)
+      : path.dirname(enclosing.root);
+  } else {
+    root = args.root ? path.resolve(process.cwd(), args.root) : STARTER_ROOT;
+  }
+
   const wsFile = findWorkspaceFile({ root, explicit: args.workspace });
   if (!wsFile) {
     fail("未找到 .code-workspace 文件。请用 --workspace 指定，或从 template.code-workspace 复制一份。");
@@ -196,10 +214,12 @@ function loadContext(args) {
   }
   const folders = buildFolderModels(ws.folders, ws.dir, root, { log, warn });
   if (folders.length === 0) fail("没有可用的 folder 条目。");
-  const wtRoot = args.worktreesDir
-    ? path.resolve(process.cwd(), args.worktreesDir)
-    : path.join(path.dirname(ws.dir), WORKTREES_DIR_NAME);
-  return { root, wsFile, wsDir: ws.dir, folders, wtRoot };
+  if (!wtRoot) {
+    wtRoot = args.worktreesDir
+      ? path.resolve(process.cwd(), args.worktreesDir)
+      : path.join(path.dirname(root), WORKTREES_DIR_NAME);
+  }
+  return { root, wsFile, wsDir: ws.dir, folders, wtRoot, enclosing };
 }
 
 // ---------------------------------------------------------------------------
@@ -285,23 +305,26 @@ function ensureRepoAndBaseline(dir) {
   }
 }
 
-/** 解析新分支的起点：本地 main → master → origin/HEAD → 当前分支 → HEAD。 */
+/**
+ * 解析新分支的起点：**主检出当前所在分支**优先（用户期望"从我现在打开的分支分叉"），
+ * 退化链：远端默认分支 → 本地 main → master → HEAD。可用 --base 显式覆盖。
+ */
 function resolveBase(repoDir, explicit) {
   if (explicit) return explicit;
-  if (gitOk(repoDir, ["show-ref", "--verify", "--quiet", "refs/heads/main"])) return "main";
-  if (gitOk(repoDir, ["show-ref", "--verify", "--quiet", "refs/heads/master"])) return "master";
+  try {
+    const cur = git(repoDir, ["symbolic-ref", "--short", "HEAD"]);
+    if (cur) return cur;
+  } catch {
+    /* detached HEAD */
+  }
   try {
     const ref = git(repoDir, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
     if (ref) return ref;
   } catch {
     /* 无远端 HEAD */
   }
-  try {
-    const cur = git(repoDir, ["symbolic-ref", "--short", "HEAD"]);
-    if (cur) return cur;
-  } catch {
-    /* detached */
-  }
+  if (gitOk(repoDir, ["show-ref", "--verify", "--quiet", "refs/heads/main"])) return "main";
+  if (gitOk(repoDir, ["show-ref", "--verify", "--quiet", "refs/heads/master"])) return "master";
   return "HEAD";
 }
 
@@ -433,11 +456,37 @@ function cmdNew(args) {
     fail(`当前目录位于 worktree 内（${enclosing.root}）。请在主树（workspace-root）中运行 new。`);
   }
 
-  const missing = ctx.folders.filter((f) => !f.exists);
+  // ---- 成员清单：完整性由框架保证，不外包给 .code-workspace ----
+  //
+  // workspace-root 是框架自身所在目录（含 scripts/），**永远**作为成员创建：
+  // .code-workspace 只决定"额外还有哪些成员"，不决定 workspace-root 是否存在。
+  const rootDir = ctx.root;
+  if (path.resolve(ctx.wsDir) !== path.resolve(rootDir)) {
+    fail(
+      `.code-workspace 必须位于 workspace-root 内（当前 ${ctx.wsDir}，workspace-root 是 ${rootDir}）。\n` +
+        `       放在上级会导致它不被提交，实例里没有 workspace 定义，实例必然不可用。`
+    );
+  }
+  const rootDeclared = ctx.folders.some((f) => path.resolve(f.absPath) === path.resolve(rootDir));
+  if (!rootDeclared) {
+    warn(
+      `.code-workspace 未声明 workspace-root，已按框架自身目录隐式纳入；` +
+        `建议补一条 { "name": "workspace-root", "path": "." }（否则 VS Code 侧看不到它）。`
+    );
+  }
+
+  const plan = [
+    { repo: "workspace-root", main: rootDir, rawPath: "." },
+    ...ctx.folders
+      .filter((f) => path.resolve(f.absPath) !== path.resolve(rootDir))
+      .map((f) => ({ repo: f.originalName, main: f.absPath, rawPath: f.rawPath })),
+  ];
+
+  const missing = plan.filter((m) => !fs.existsSync(m.main));
   if (missing.length > 0) {
     fail(
-      `以下 folder 路径不存在，请先 clone 后再创建：\n` +
-        missing.map((f) => `  - ${f.originalName}: ${f.absPath}`).join("\n")
+      `以下成员路径不存在，请先 clone 后再创建：\n` +
+        missing.map((m) => `  - ${m.repo}: ${m.main}`).join("\n")
     );
   }
   const absolute = ctx.folders.filter((f) => f.isAbsolute);
@@ -455,35 +504,40 @@ function cmdNew(args) {
   log(`  主树 workspace: ${ctx.wsFile}`);
   log(`  检出根目录: ${instRoot}`);
 
-  ensureRepoAndBaseline(ctx.wsDir);
+  ensureRepoAndBaseline(rootDir);
 
-  const instWsDir = worktreeWorkspaceDir(instRoot, ctx.wsDir);
+  const instWsDir = worktreeWorkspaceDir(instRoot, rootDir);
+  log(`  将创建 ${plan.length} 个成员（base 默认取各主检出当前分支，可用 --base 覆盖）：`);
+  for (const m of plan) {
+    log(`    ${m.repo.padEnd(16)} ${m.main}`);
+  }
+
   const created = [];
 
   try {
-    for (const f of ctx.folders) {
-      const mainAbs = f.absPath;
-      const memberDir = resolveMemberPath(instWsDir, f.rawPath);
+    for (const m of plan) {
+      const mainAbs = m.main;
+      const memberDir = resolveMemberPath(instWsDir, m.rawPath);
 
       if (args.fetch) {
         try {
           git(mainAbs, ["fetch", "--prune"]);
         } catch {
-          warn(`${f.originalName}: fetch 失败，使用本地 ref。`);
+          warn(`${m.repo}: fetch 失败，使用本地 ref。`);
         }
       }
       const base = resolveBase(mainAbs, args.base);
 
       if (gitOk(mainAbs, ["show-ref", "--verify", "--quiet", `refs/heads/${id}`])) {
-        throw new Error(`${f.originalName}: 分支 "${id}" 已存在，请先删除或换名`);
+        throw new Error(`${m.repo}: 分支 "${id}" 已存在，请先删除或换名`);
       }
       if (fs.existsSync(memberDir)) {
-        throw new Error(`${f.originalName}: 目标目录已存在 ${memberDir}`);
+        throw new Error(`${m.repo}: 目标目录已存在 ${memberDir}`);
       }
 
       git(mainAbs, ["worktree", "add", "-b", id, memberDir, base]);
-      created.push({ repo: f.originalName, mainAbs, memberDir, base, rawPath: f.rawPath });
-      log(`  ✓ ${f.originalName} → ${path.relative(process.cwd(), memberDir) || memberDir} (base ${base})`);
+      created.push({ repo: m.repo, mainAbs, memberDir, base, rawPath: m.rawPath });
+      log(`  ✓ ${m.repo} → ${path.relative(process.cwd(), memberDir) || memberDir} (base ${base})`);
     }
   } catch (err) {
     rollback(created, id, instRoot);
@@ -491,7 +545,7 @@ function cmdNew(args) {
   }
 
   // 种入实时定义 + 重跑 init（幂等）
-  const seeded = seedContainer(ctx.wsDir, instWsDir);
+  const seeded = seedContainer(rootDir, instWsDir);
   const init = runInit(instWsDir);
   let seededCommit = false;
   try {
@@ -521,7 +575,7 @@ function cmdNew(args) {
     branch: id,
     createdAt: new Date().toISOString(),
     workspaceFile: path.basename(ctx.wsFile),
-    workspaceDir: path.basename(ctx.wsDir),
+    workspaceDir: path.basename(rootDir),
     members: created.map((c) => ({
       repo: c.repo,
       main: c.mainAbs,

@@ -54,7 +54,7 @@ permission:
 
 **Apply 阶段**（用户 `/opsx-apply` 后）：
 
-4. 用 Task 工具派发（`@frontend-writer`、`@backend-writer`……），无依赖并发、有依赖串行；同仓、同 Assignee、顺序依赖的任务尽量合并一次派发以减少冷启动；跨仓但互不依赖的必须并发，不得保守串行。Prompt 必须包含三件套：`context.md` + `design.md` + `specs/{target}/spec.md`，外加本仓上下文（路径取自 `.code-workspace`，验证命令与约束 live 读取该仓 `AGENTS.md`）；验证命令用 scoped 形式，且不重复执行 Writer 已回报的验证。
+4. 用 Task 工具派发（`@frontend-writer`、`@backend-writer`……），无依赖并发、有依赖串行；同仓、同 Assignee、顺序依赖的任务尽量合并一次派发以减少冷启动；跨仓但互不依赖的必须并发，不得保守串行。Prompt 必须包含三件套：`context.md` + `design.md` + `specs/{target}/spec.md`，外加本仓上下文（路径取自 `.code-workspace`，验证命令与约束 live 读取该仓 `AGENTS.md`）；**如有本仓技能，在 Prompt 中指明技能名与 SKILL.md 确切路径**（技能留在各仓，框架只引用——详见 `AGENTS.md` 第 2 节技能引用原则）；验证命令用 scoped 形式，且不重复执行 Writer 已回报的验证。
 5. 全部 Task 回报 `done` 后，按下方"审查触发判定"决定是否调用 `@reviewer`：需要则以限定范围唤起，`FAILED` → 生成 Remediation Task（编号递增，优先恢复原 Writer 子会话）重派，直到 `PASSED`（同一问题连续失败 3 次停下请示）；不需要则直接汇报。Reviewer 默认不重跑 Writer 已跑的验证。
 6. `PASSED` 后停下汇报，**等待用户显式 `/opsx-archive`**。
 

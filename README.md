@@ -47,6 +47,7 @@ workspace-root/              # Orchestrator 运行位置（本仓库）
 3. **Per-Repo Writer（`mode: "subagent"`）** — 每仓一个，只写自己的仓库（权限物理隔离），通过 Task 接收文件链接组并执行。
 4. **Reviewer（`mode: "subagent"`）** — 只读所有仓，只写 `openspec/changes/*/review-report.md`，负责跨仓一致性审查。
 5. **OpenSpec SDD** — 每个 Change 包含官方四件套（`proposal.md` / `specs/{repo}/spec.md` / `design.md` / `tasks.md`）+ 本框架扩展（`context.md` / `review-report.md`）。
+6. **技能引用（不收编）** — 子应用的技能留在各仓自己的技能目录（服务各仓独立开发者），框架**只引用、不复制、不集中**。`/prepare` 上报各仓技能，派发时 Orchestrator 在 Prompt 中指明技能名与 SKILL.md 路径，Writer 用 `read` 直接读取执行（见 `AGENTS.md` 第 2 节技能引用原则）。
 
 ## 快速开始
 
@@ -186,10 +187,13 @@ P/                                          ← 主树父目录
 
 镜像规则：实例内的 workspace 目录保持主树的 basename，成员落在与主树**完全相同的相对层级**上。因此那份已提交的 `.code-workspace` 在实例里**无需任何修改**即可解析到本实例的成员（`../frontend` 指向本 worktree 的 frontend）。
 
+> 两个前置约束：`.code-workspace` 必须**位于 workspace-root 本仓内**（放上级会导致它不被提交，实例里没有 workspace 定义，`new` 会明确报错）；folder 路径必须用**相对路径**。
+
 ### 命令
 
 ```bash
 npm run worktree -- new feat-a          # 创建整套检出（自动补基线 commit + 种入定义 + 装依赖）
+                                        # base 默认取各主检出「当前所在分支」，--base <ref> 可覆盖
 npm run worktree -- open feat-a         # 输出启动命令（--exec 直接启动 opencode）
 npm run worktree -- install feat-a      # 补装/重装各成员依赖
 npm run worktree -- list                # 列出所有检出
@@ -207,7 +211,9 @@ opencode /…/P/worktrees/feat-a/my-project
 
 ### 关键性质
 
-- **不需要用户先 commit**：`new` 从基线 ref 分叉，主树脏、停在任意分支都不影响；它只把 **workspace 定义**（`.code-workspace` / `.opencode/**` / `AGENTS.md` 等）种入实例，并明确排除 `openspec/changes/**`（那是当次变更的工作区，必须隔离）。用户正在改的业务文件一个都不碰。
+- **完整性由框架保证**：`workspace-root` **恒定**作为成员创建（来源是框架自身目录，即含 `scripts/` 的那个），**不取决于 `.code-workspace` 是否声明它**；`.code-workspace` 只决定"额外还有哪些成员"。任一成员创建失败 → 整体回滚，不留半残实例。
+- **base 取当前分支**：每个成员都从**该仓主检出当前所在的分支**分叉（不是写死 main/master），可用 `--base <ref>` 统一覆盖。
+- **不需要用户先 commit**：主树脏、停在任意分支都不影响；`new` 只把 **workspace 定义**（`.code-workspace` / `.opencode/**` / `AGENTS.md` 等）种入实例，并明确排除 `openspec/changes/**`（那是当次变更的工作区，必须隔离）。用户正在改的业务文件一个都不碰。
 - **bootstrap 自动**：workspace-root 首次使用时自动 `git init` + 创建基线 commit（仅本地），用户无需理解"基线"。
 - **原子性**：结构失败（仓不存在 / 分支被占 / 路径冲突）→ 全部回滚；依赖安装失败非致命，可 `install` 重试。
 - **依赖独立**：每个 worktree 各自安装 `node_modules`，不共享（分支间依赖漂移时不会互相污染）。

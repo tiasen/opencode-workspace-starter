@@ -23,6 +23,7 @@ description: 检查 workspace 各仓是否就位（当前检出、路径可解�
 4. **逐仓检查**（每个 folder，只检查、不写）：
    - 路径是否存在；不存在则标记为 `missing`（缺仓不阻塞命令本身，但必须在回报中明确列出）。
    - `{repo}/AGENTS.md` 是否存在；存在则摘录一句话：技术栈 + 验证命令。
+   - 本仓技能：列出 `{repo}/.opencode/skills/*/SKILL.md`（或 `.claude/skills/`、`.agents/skills/`）的技能名 + `AGENTS.md` 中的技能声明。技能留在各仓、框架只引用，见 `AGENTS.md` 第 2 节技能引用原则。
    - 当前分支（`git -C <path> rev-parse --abbrev-ref HEAD`）。若在 worktree 内，各成员分支应等于 worktree id；在主树则应停在基线分支。
    - 若为 git 仓库，仅记录工作区洁净度（`git status --short --branch` 一眼结论），**不记录、不比对 commit hash**——执行依据永远是 live 代码，快照式 pin 不再维护。
 5. **worktree 完整性**（仅在 worktree 内时）：运行 `node scripts/worktree.mjs doctor`。
@@ -34,11 +35,11 @@ description: 检查 workspace 各仓是否就位（当前检出、路径可解�
 
 **当前检出**: worktree `feat-a`（branch feat-a） / 主树（非 worktree）
 
-| 仓库 | 路径 | 状态 | 分支 | AGENTS.md |
-|------|------|------|------|-----------|
-| workspace-root | `.` | OK | feat-a | —（本仓即 Orchestrator 所在仓） |
-| frontend | `../frontend` | OK / MISSING | feat-a | 有（React + TS，`npm run typecheck`）/ 缺失 |
-| backend | `../backend` | OK（dirty：2 个未提交文件）/ MISSING | feat-a | 有 / 缺失 |
+| 仓库 | 路径 | 状态 | 分支 | AGENTS.md | 技能 |
+|------|------|------|------|-----------|------|
+| workspace-root | `.` | OK | feat-a | —（本仓即 Orchestrator 所在仓） | {框架级 skill 名} |
+| frontend | `../frontend` | OK / MISSING | feat-a | 有（React + TS，`npm run typecheck`）/ 缺失 | {仓技能名：用途} / 无 |
+| backend | `../backend` | OK（dirty：2 个未提交文件）/ MISSING | feat-a | 有 / 缺失 | {仓技能名：用途} / 无 |
 
 缺失仓：{列出 missing 的仓，后续 Change 设计不得依赖它们，先解决检出问题}
 worktree 完整性：{完整 / 不完整（列出问题）/ 不适用（主树）}

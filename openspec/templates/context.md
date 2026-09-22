@@ -28,6 +28,11 @@
 - **frontend**：React + TypeScript，使用 `npm run typecheck` 做类型检查，API 客户端位于 `src/api/`，禁止手写后端已提供的类型。
 - **backend**：Node + Express，使用 `npm test` 做契约测试，路由定义位于 `src/routes/`，所有对外接口必须同步更新 `openapi.yaml`。
 
+本次 Change 使用的技能（技能留在各仓，框架只引用、不复制；派发时在 Prompt 中指明确切路径）：
+
+- **frontend**：`{skill-name}`（`../frontend/.opencode/skills/{skill-name}/SKILL.md`）—— {用途} / 无
+- **backend**：`{skill-name}`（`../backend/.opencode/skills/{skill-name}/SKILL.md`）—— {用途} / 无
+
 ## Review 判定
 
 - **是否需要跨仓审查**: 是 / 否

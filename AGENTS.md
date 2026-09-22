@@ -19,6 +19,7 @@
 - 不得手动猜测或硬编码仓库绝对路径。如需确认仓库列表，读取由 `npm run init` 生成的 Agent 配置或重新解析 `.code-workspace`。
 - 各子仓的协作约束以各仓根目录的 `AGENTS.md` 为准，派发时 live 读取，禁止凭记忆或过期假设填写。
 - **单向依赖原则**：编排框架只读子仓，子仓对框架无感知、无需配合。新仓库接入 = 改 `.code-workspace` + 跑 `npm run init`，零侵入（不需要子仓添加或修改任何文件）；子仓唯一要做的就是保持自家 `AGENTS.md` 准确——而那是它本来就要做的。角色信息（如"调用方/实现方"）是相对当次 Change 而言的，只写在该 Change 的 `context.md` 仓库清单里，不设常驻角色表。
+- **技能引用原则**：技能留在各仓（各仓自己的技能目录，如 `<repo>/.opencode/skills/`，服务各仓独立开发者），框架**只引用、不复制、不集中**。各仓 `AGENTS.md` 应声明本仓技能（名 + 一句话用途）；派发时 Orchestrator 在 Prompt 中指明技能名与 SKILL.md 确切路径，Writer 用 `read` 直接读取并执行（不走 `skill` 工具——后者只认 workspace-root 实例内注册的技能）。框架级跨仓技能才放在 workspace-root 的 `.opencode/skills/`，走原生 `skill` 工具。
 
 ## 3. OpenSpec SDD 阶段门禁（最高优先级）
 
@@ -86,7 +87,7 @@ Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 
 
 每个 Task 使用以下结构构造 Prompt（将 `{change-name}`、`{N}` 替换为实际值）：
 
-> "请读取并执行 `openspec/changes/{change-name}/tasks.md` 中的 Task {N}。上下文文件如下：`openspec/changes/{change-name}/context.md`（全局背景）、`openspec/changes/{change-name}/design.md`（跨仓技术方案）、`openspec/changes/{change-name}/specs/{target}/spec.md`（你的专属 delta spec，主文件）。本仓上下文（live 读取 `.code-workspace` 与各仓 `AGENTS.md`，以实时代码为准，不依赖任何快照）：路径 `{rel-path}`、验证命令 `{commands}`。你的修改范围限定在本仓内，绝不触碰其他仓库。完成修改后进行验证（运行该仓库约定的 lint / typecheck / test 命令）并回报：修改的文件列表、验证结果、未解决的风险。"
+> "请读取并执行 `openspec/changes/{change-name}/tasks.md` 中的 Task {N}。上下文文件如下：`openspec/changes/{change-name}/context.md`（全局背景）、`openspec/changes/{change-name}/design.md`（跨仓技术方案）、`openspec/changes/{change-name}/specs/{target}/spec.md`（你的专属 delta spec，主文件）。本仓上下文（live 读取 `.code-workspace` 与各仓 `AGENTS.md`，以实时代码为准，不依赖任何快照）：路径 `{rel-path}`、验证命令 `{commands}`。{如有：本 Task 需使用本仓技能 `{skill-name}`，定义在 `{skill-path}/SKILL.md`，先完整阅读并严格按其约定执行。}你的修改范围限定在本仓内，绝不触碰其他仓库。完成修改后进行验证（运行该仓库约定的 lint / typecheck / test 命令）并回报：修改的文件列表、验证结果、未解决的风险。"
 
 示例：
 
@@ -123,7 +124,7 @@ Prompt 中的 `{commands}` 必须是**只覆盖本次改动面**的命令，而�
 #### 规则一：派发必须 grounded in live 上下文（`/prepare` + 实时读取）
 
 - 派发任何 Task 之前，必须已运行 `/prepare` 确认各仓就位。发现缺仓或缺 `AGENTS.md` 时，先补齐检出或缩小 Change 范围，不得带着未知数派发。
-- 构造 Prompt 时必须写入本仓上下文：路径（取自 `.code-workspace`；在 worktree 内运行时即检出内相对路径，见第 6 节）、验证命令与关键约束（live 读取该仓 `AGENTS.md`）、当次 Change 的三件套文档。以实时代码为准，不依赖任何快照文件；禁止凭记忆或过期假设填写。
+- 构造 Prompt 时必须写入本仓上下文：路径（取自 `.code-workspace`；在 worktree 内运行时即检出内相对路径，见第 6 节）、验证命令与关键约束（live 读取该仓 `AGENTS.md`）、当次 Change 的三件套文档；**如有本仓技能，须在 Prompt 中指明技能名与 SKILL.md 确切路径**（见第 2 节技能引用原则）。以实时代码为准，不依赖任何快照文件；禁止凭记忆或过期假设填写。
 - 执行依据永远是 live 代码：Writer 动工时读到的就是最新状态，无需也不维护 commit 快照；真正的跨仓不一致由 Reviewer 的一致性审查兜底。
 
 #### 规则二：严禁跨仓任务（单仓原子性）
@@ -134,7 +135,7 @@ Prompt 中的 `{commands}` 必须是**只覆盖本次改动面**的命令，而�
 - 派发前 scope 自检（逐 Task 执行，不通过则打回重拆，不得派发）：
   1. `/prepare` 已确认目标仓就位（路径可解析、`AGENTS.md` 存在）？
   2. 修改范围是否全部落在 Assignee 本仓内？
-  3. Prompt 是否包含三件套 + 本仓上下文（路径、验证命令）？
+  3. Prompt 是否包含三件套 + 本仓上下文（路径、验证命令）+ 相关技能（如有，须指明 SKILL.md 路径）？
 
 ## 5. 审查触发判定与审查闭环（Apply 阶段）
 
@@ -197,6 +198,8 @@ P/                                          ← 主树父目录
 ```
 
 镜像规则：实例内的 workspace 目录保持主树的 basename，每个成员落在与主树**完全相同的相对层级**上。因此已提交的 `.code-workspace` 在实例里无需任何修改即可解析到本实例的成员。
+
+完整性：`workspace-root` **恒定**是实例成员（来源为框架自身目录，不取决于 `.code-workspace` 是否声明它）；`.code-workspace` 只决定额外还有哪些成员。任一成员创建失败即整体回滚，不存在半残实例。
 
 规则：
 

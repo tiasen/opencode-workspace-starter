@@ -1,13 +1,15 @@
 {
   // VS Code workspace 配置 —— 本文件是唯一的目录配置源。
   // 用法:
-  //   1. 复制本文件为 <your-project>.code-workspace 并放在 workspace-root 上级或本仓根目录
-  //   2. 修改 folders 指向真实仓库路径（相对路径相对 .code-workspace 文件所在目录解析）
+  //   1. 复制本文件为 <your-project>.code-workspace，**放在 workspace-root 本仓根目录内**
+  //      （必须在本仓内：worktree 实例靠它被提交才能自我描述；放上级会导致实例缺 workspace 定义）
+  //   2. 修改 folders 指向真实仓库路径（必须用相对路径；相对路径相对本文件所在目录解析）
   //   3. 运行 npm run init -- --workspace <your-project>.code-workspace
   // init 脚本将从此文件派生所有 Agent 路径配置，无需手动维护 Agent 中的路径。
   "folders": [
     {
-      // workspace-root: Orchestrator 运行位置，同时托管 openspec/ 与共享文档
+      // workspace-root: Orchestrator 运行位置，同时托管 openspec/ 与共享文档。
+      // 声明它可让 VS Code 侧看到本仓；即使不声明，worktree 也会按框架自身目录恒定创建它。
       "name": "workspace-root",
       "path": "."
     },

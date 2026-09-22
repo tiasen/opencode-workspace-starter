@@ -309,7 +309,14 @@ function writerMarkdown(folder) {
     ``,
     `1. 只执行 Task 指定的 \`openspec/changes/{change-name}/tasks.md\` 中的 Task；动工前必读该 Task 的上下文文件链接组：\`context.md\`（全局背景）、\`design.md\`（跨仓技术方案）、\`specs/${folder.name}/spec.md\`（你的专属 delta spec，主文件，capability 路径即本仓名）。`,
     `2. 动工前阅读 \`${agentsRef}\`（本仓协作约束：技术栈、目录约定、lint / typecheck / test 命令），与专属契约冲突时以本仓 \`AGENTS.md\` 为准并上报。`,
-    `3. 完成后运行本仓约定的验证命令，向 Orchestrator 回报：修改的文件列表、验证结果、未解决的风险。`,
+    `3. 若 Task 指定了本仓技能（见下"技能引用"），先完整阅读其 SKILL.md 并严格按其约定执行；技能若带配套脚本，以本仓为 cwd 调用。`,
+    `4. 完成后运行本仓约定的验证命令，向 Orchestrator 回报：修改的文件列表、验证结果、未解决的风险。`,
+    ``,
+    `## 技能引用（只引用、不复制）`,
+    ``,
+    `- 本仓技能归本仓所有，位置在本仓自己的技能目录（如 \`${folder.relPath}/.opencode/skills/<name>/SKILL.md\`，也可能是 \`.claude/skills/\` 或 \`.agents/skills/\`），服务本仓自己的开发者；框架**不复制、不集中**它们。`,
+    `- 你通过 \`read\` 直接读取 SKILL.md（只是文件，不走 \`skill\` 工具——后者只认 workspace-root 实例内注册的技能）。`,
+    `- 需要用哪个技能、确切路径是什么，以 Task Prompt 为准；不确定的回问 Orchestrator，不要猜。`,
     ``,
     `## 禁止`,
     ``,
@@ -476,6 +483,13 @@ async function main() {
         `folder "${f.originalName}" 使用了绝对路径，worktree 的镜像布局要求相对路径（否则无法为每个 worktree 正确解析成员）。`
       );
     }
+  }
+
+  if (!folders.some((f) => f.isRoot)) {
+    warn(
+      '.code-workspace 未声明 workspace-root（{ "name": "workspace-root", "path": "." }）：' +
+        "Agent 相对路径仍以本仓为基准、worktree 也会恒定创建它，但建议补上以便 VS Code 侧看到本仓。"
+    );
   }
 
   const writers = folders.filter((f) => !f.isRoot);
