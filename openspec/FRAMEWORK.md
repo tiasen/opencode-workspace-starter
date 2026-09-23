@@ -76,7 +76,7 @@ openspec/
 
 出现"只写在 design、没进 spec"的条目，先补齐 spec 再停止。禁止把这种不一致带入 Apply：那会让 Writer 按 spec 实现、Reviewer 按 design 判定，必然返工。
 
-## 4. 阶段门禁与生命周期（严格遵循官方 OpenSpec）
+## 4. 阶段门禁与生命周期（严格遵循官方 OpenSpec，Fast-track 例外见下）
 
 阶段由用户通过官方 `/opsx-*` 命令显式驱动，**Orchestrator 不得自行推进阶段**：
 
@@ -90,6 +90,7 @@ openspec/
 
 > 铁律：`/opsx-propose` 完成后必须停止（官方命令自身要求 "stop ... wait for a new user request"）；
 > 未经用户显式 `/opsx-apply`，不得派发任何 Writer；未经用户显式 `/opsx-archive`，不得归档。
+> 唯一例外是 Fast-track：用户本轮明确要求跳过 openspec（"跳过 openspec / 不走 openspec / 直接改 / 小改动直接做"或 skip openspec）时，可跳过全套 artifacts 与阶段门禁，直接以 Task Prompt 为书面依据派发单仓 Writer；单仓原子性、live 上下文、scoped 验证不变，默认不审查、不归档。不得从"改动小"自行推断跳过。
 
 内部细粒度状态（仅用于描述，**不作为自动推进依据**）：
 

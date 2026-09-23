@@ -22,6 +22,9 @@ context: |
   artifacts and then STOPS for user review — never start implementation or dispatch in the
   same response. Apply is the only phase that dispatches implementation. Archive runs only
   on explicit user command. Never advance a phase on your own.
+  Exception (fast-track): only when the user explicitly says skip openspec / direct dispatch
+  in the current request, skip all artifacts and dispatch a single-repo Writer via the Task
+  tool with live context and scoped verification; default to no review and no archive.
 
   Review is conditional: invoke the reviewer only when the change alters an externally
   observable contract (API / events / protocol / shared types / cross-repo config), or must

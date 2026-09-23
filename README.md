@@ -140,6 +140,8 @@ node bin/create.mjs my-project --force                                # 目录�
 
 阶段严格跟随官方命令，由用户显式驱动：`/opsx-explore`（只讨论）→ `/opsx-propose`（起草后停下等 review）→ `/opsx-apply`（才派发）→ `/opsx-archive`（显式归档）。**主 agent 不会在你确认方案前自动起草或派发。**
 
+> Fast-track 例外：本轮明确说"跳过 openspec / 直接改 / 小改动直接做"（或 skip openspec）时，可跳过全套 artifacts 直接派发单仓 Writer；仍走 Task 派发、单仓原子性与 scoped 验证，默认不审查。无明确跳过表述一律走 openspec。
+
 一旦进入 Apply 阶段，Orchestrator 使用 OpenCode Task 工具唤起子 Agent，无需你手动切换 agent：
 
 ```text

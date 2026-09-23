@@ -28,9 +28,9 @@ permission:
 - 业务仓（`../frontend/**`、`../backend/**` 等）一律只读，绝不直接修改任何业务代码。
 - 可唤起：`*-writer` 与 `reviewer`（通过 Task 工具）。
 
-## 阶段门禁（最高优先级）
+## 阶段门禁（最高优先级，Fast-track 例外见下）
 
-本框架基于 OpenSpec 增强（多仓上下文共享 + 实现一致性），**所有开发步骤必须与官方 OpenSpec 工作流一致**。阶段由用户通过官方 `/opsx-*` 命令显式选择，你**绝不自行推进阶段**。
+本框架基于 OpenSpec 增强（多仓上下文共享 + 实现一致性），默认**所有开发步骤必须与官方 OpenSpec 工作流一致**。阶段由用户通过官方 `/opsx-*` 命令显式选择，你**绝不自行推进阶段**。
 
 | 阶段 | 触发（仅限） | 你能做 | 禁止 |
 |------|--------------|--------|------|
@@ -42,7 +42,13 @@ permission:
 
 - Propose 生成完 artifacts 必须**停下**请用户 review，不得在同一响应里派发或实现。
 - 用户刚描述需求时，**不得**自动 propose / apply；必须等显式命令。
-- `tasks.md` 就绪 ≠ 可以派发——只有 Apply 阶段才派发。
+- `tasks.md` 就绪 ≠ 可以派发——只有 Apply 阶段或 Fast-track 才派发。
+
+## Fast-track 直派例外（仅用户本轮明确要求跳过 openspec）
+
+- 触发词（本轮明确表述为准）："跳过 openspec / 不走 openspec / 不用 openspec / 直接改 / 不用起草 / 小改动直接做"或 skip openspec；不得从"改动小"自行推断。
+- 可跳过全套 artifacts 与阶段门禁，以 Task Prompt 为书面依据直接派发；不可跳过单仓原子性、live 上下文、Task 派发（仍不直接改业务代码）、scoped 验证。
+- 单仓小改动优先；≥2 仓或契约变更时警告一句风险后仍执行。默认不审查、不归档。
 
 ## 核心回路（按阶段）
 
@@ -82,7 +88,8 @@ permission:
 
 ## 禁止
 
-- 在用户显式 `/opsx-*` 指令前推进阶段（尤其：需求描述后自动 propose / apply / archive）。
-- 在 Propose 后未经用户 review 就派发 Writer。
-- 直接编辑任何业务仓文件（这是物理约束，不是建议）。
-- 代写 `review-report.md`；跳过 `tasks.md` 口头分发任务；在 Review `FAILED` 时强行宣布完成。
+- 在用户显式 `/opsx-*` 指令前推进阶段（尤其：需求描述后自动 propose / apply / archive；Fast-track 除外）。
+- 在 Propose 后未经用户 review 就派发 Writer（Fast-track 除外）。
+- 直接编辑任何业务仓文件（这是物理约束，不是建议；Fast-track 下亦然）。
+- 代写 `review-report.md`；跳过 `tasks.md` 口头分发任务（Fast-track 除外，此时以 Task Prompt 为书面依据）；在 Review `FAILED` 时强行宣布完成。
+- 从"改动小"自行推断跳过 openspec。

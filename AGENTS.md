@@ -21,9 +21,9 @@
 - **单向依赖原则**：编排框架只读子仓，子仓对框架无感知、无需配合。新仓库接入 = 改 `.code-workspace` + 跑 `npm run init`，零侵入（不需要子仓添加或修改任何文件）；子仓唯一要做的就是保持自家 `AGENTS.md` 准确——而那是它本来就要做的。角色信息（如"调用方/实现方"）是相对当次 Change 而言的，只写在该 Change 的 `context.md` 仓库清单里，不设常驻角色表。
 - **技能引用原则**：技能留在各仓（各仓自己的技能目录，如 `<repo>/.opencode/skills/`，服务各仓独立开发者），框架**只引用、不复制、不集中**。各仓 `AGENTS.md` 应声明本仓技能（名 + 一句话用途）；派发时 Orchestrator 在 Prompt 中指明技能名与 SKILL.md 确切路径，Writer 用 `read` 直接读取并执行（不走 `skill` 工具——后者只认 workspace-root 实例内注册的技能）。框架级跨仓技能才放在 workspace-root 的 `.opencode/skills/`，走原生 `skill` 工具。
 
-## 3. OpenSpec SDD 阶段门禁（最高优先级）
+## 3. OpenSpec SDD 阶段门禁（最高优先级，§3.3 例外除外）
 
-本框架**基于 OpenSpec 增强**（多仓上下文共享 + 实现一致性），所有开发步骤必须与官方 OpenSpec 工作流严格一致。**阶段由用户通过官方 `/opsx-*` 命令显式选择，你绝不自行推进阶段。** "用户描述完需求 → 自动起草 → 自动派发"是明确禁止的行为。
+本框架**基于 OpenSpec 增强**（多仓上下文共享 + 实现一致性），默认所有开发步骤必须与官方 OpenSpec 工作流严格一致。**阶段由用户通过官方 `/opsx-*` 命令显式选择，你绝不自行推进阶段。** "用户描述完需求 → 自动起草 → 自动派发"是明确禁止的行为。唯一例外是 §3.3 Fast-track：用户本轮明确要求跳过 openspec 时才可走。
 
 | 阶段 | 触发（仅限下列） | 你只能做 | 绝对禁止 |
 |------|------------------|----------|----------|
@@ -36,7 +36,7 @@
 ### 3.1 铁律
 
 - **Propose 完成后必须停下**：列出本次生成的 artifacts 与关键设计决策，请用户 review；**不得在同一响应里开始实现或派发**。官方 `/opsx-propose` 自身即要求 "stop ... wait for a new user request"，不得违背。
-- **只有 Apply 阶段才派发 Writer**；Explore / Propose / Review 阶段一律不得派发。
+- **只有 Apply 阶段或 Fast-track（§3.3）才派发 Writer**；Explore / Propose / Review 阶段一律不得派发。
 - **只有 Archive 阶段才归档**；Apply 完成后停下汇报，等待用户显式归档。
 - **审查不是每次必跑**：由第 5 节的触发判定决定；判定跳过时必须把理由写进 `context.md`。
 - 用户在 Explore 阶段或描述需求时若要求直接实现，先提示其显式进入 Propose / Apply，不擅自推进阶段。
@@ -61,10 +61,18 @@
 
 Propose 阶段推荐顺序：`/prepare` 确认就位 → `/opsx-propose {name}` 生成四件套 → 按仓细化 `specs/{repo}/spec.md` 并补 `context.md` → **做一次 design↔spec 一致性自检**（design 中每条 MUST / 契约约束都能在某个 delta spec 的 Requirement/Scenario 找到对应验收，否则先补齐 spec）→ 整理 `tasks.md` 的 Assignee/Status → **停止，请用户 review**。
 
-## 4. Apply 阶段的派发机制
+### 3.3 Fast-track 直派例外（仅用户本轮明确要求跳过 openspec）
 
-> 本章仅在 Apply 阶段生效。进入 Apply 的唯一方式是用户显式运行 `/opsx-apply`（或明确说"开始实现"）。
-> 进入 Apply 后，使用 OpenCode Task 工具唤起子 Agent 执行任务——这是本框架相对官方 `/opsx-apply` 的增强：官方让当前 agent 自己改代码，本框架改由各仓 Writer 执行。
+- **默认走 openspec；只有用户在本轮明确说"跳过 openspec / 不走 openspec / 不用 openspec / 直接改 / 不用起草 / 小改动直接做"（或英文 skip openspec）时，才可走本例外。** 不得从"改动小""口头简单"自行推断；无明确跳过表述一律走正常 openspec 流程。
+- **可跳过**：Explore / Propose / Review / Archive 全套 artifacts（proposal / design / specs / tasks / context / review-report）与阶段门禁；`tasks.md` 书面记录要求在本通道下豁免，以 Task Prompt 为书面依据。
+- **不可跳过**：单仓原子性（§4.5 规则二）、live 上下文（路径与验证命令仍须 live 读取各仓 `AGENTS.md`）、Task 派发（Orchestrator 仍不直接改业务代码）、scoped 验证与回报。
+- **适用面**：单仓小改动优先；若涉及 ≥2 仓或外部可观察契约变更，须在派发前用一句话警告风险（无 spec 可追溯、无 review 兜底），但用户已明确跳过则仍执行，不二次索要确认。
+- Fast-track 默认不唤起 `@reviewer`（用户显式要求审查时除外）；完成后直接汇报，不等待 archive，不生成 `review-report.md`。
+
+## 4. Apply 阶段与 Fast-track 的派发机制
+
+> 本章在 Apply 阶段与 Fast-track（§3.3）均生效。进入 Apply 的唯一方式是用户显式运行 `/opsx-apply`（或明确说"开始实现"）；进入 Fast-track 的唯一方式是用户本轮明确要求跳过 openspec。
+> 进入 Apply 或 Fast-track 后，使用 OpenCode Task 工具唤起子 Agent 执行任务——这是本框架相对官方 `/opsx-apply` 的增强：官方让当前 agent 自己改代码，本框架改由各仓 Writer 执行。Fast-track 下无 `tasks.md`，以 Task Prompt 为书面依据，但单仓原子性、live 上下文、scoped 验证要求不变。
 
 ### 4.1 派发时机
 
@@ -213,12 +221,13 @@ P/                                          ← 主树父目录
 
 ## 7. 禁止事项
 
-- **禁止在用户给出显式 `/opsx-*` 指令前推进阶段**：需求描述完就自动 propose / apply / archive 是严重违规。
-- **禁止在 Propose 后未经用户 review 就派发 Writer**：`tasks.md` 就绪 ≠ 可以派发，只有 Apply 阶段才派发。
-- 禁止直接编辑 `../frontend/**`、`../backend/**` 或任何业务仓文件。
+- **禁止在用户给出显式 `/opsx-*` 指令前推进阶段**：需求描述完就自动 propose / apply / archive 是严重违规（Fast-track §3.3 除外，那本身就是用户显式跳过指令）。
+- **禁止在 Propose 后未经用户 review 就派发 Writer**：`tasks.md` 就绪 ≠ 可以派发，只有 Apply 阶段或 Fast-track 才派发。
+- 禁止直接编辑 `../frontend/**`、`../backend/**` 或任何业务仓文件（Fast-track 下亦然，仍走 Task 派发）。
 - 禁止代写 `review-report.md`（该文件仅 Reviewer 可写）。
-- 禁止跳过 `tasks.md` 直接口头分发任务；所有分发必须有书面 Task 记录。
-- 禁止分发跨仓 Task（见 4.5 规则二）；禁止在 Prompt 中省略本仓上下文（路径、验证命令）。
+- 禁止跳过 `tasks.md` 直接口头分发任务；所有分发必须有书面 Task 记录（Fast-track 除外，此时以 Task Prompt 为书面依据）。
+- 禁止分发跨仓 Task（见 4.5 规则二）；禁止在 Prompt 中省略本仓上下文（路径、验证命令）。此条 Fast-track 下同样有效。
+- 禁止从"改动小"自行推断跳过 openspec：无用户本轮明确跳过表述时必须走 openspec。
 - 禁止跳过第 5 节判定：既禁止对判定"需要审查"的改动跳过审查，也禁止对判定"可跳过"的改动无理由唤起 reviewer（除非用户要求）。
 - 禁止在 Review `FAILED` 时强行宣布完成。
 - **禁止跨检出混搭**：一次 Change 的所有派发必须落在同一个检出内（同一个 worktree，或同为主树）；不得把 Task 派给另一个 worktree 或主树，否则"整套检出"的隔离被打破。
